@@ -982,6 +982,13 @@ Panel {
               accent: root.accent
               font.family: root.fontFamily
               onTextChanged: root.locationQuery = text
+              // Escape cancels the search and hands the keys back to the
+              // panel, so a second Escape closes it as it does everywhere else.
+              Keys.onEscapePressed: function(event) {
+                root.cancelSearch()
+                keyCatcher.forceActiveFocus()
+                event.accepted = true
+              }
             }
 
             Text {
@@ -1320,7 +1327,14 @@ Panel {
                 foreground: root.fg
                 accent: root.accent
                 font.family: root.fontFamily
-                onEditingFinished: root.setNested("audio", "path", text)
+                onEditingFinished: if (text !== root.config.audio.path) root.setNested("audio", "path", text)
+                // Escape puts the saved path back and hands the keys to the
+                // panel, so a second Escape leaves settings as usual.
+                Keys.onEscapePressed: function(event) {
+                  text = Qt.binding(function() { return root.config.audio.path })
+                  keyCatcher.forceActiveFocus()
+                  event.accepted = true
+                }
               }
             }
 
