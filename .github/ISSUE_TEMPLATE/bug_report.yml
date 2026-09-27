@@ -1,0 +1,31 @@
+name: Bug report
+description: Something in the bar, the panel, or the adhan is wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin and Omarchy versions
+      description: The `version` in `manifest.json` and your Omarchy version.
+      placeholder: "plugin 1.0.0, Omarchy 3.x"
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: The contents of `~/.config/omarchy/sallah/config.json`, minus anything you would rather not share.
+      render: json
+  - type: textarea
+    id: log
+    attributes:
+      label: Shell log
+      description: "Anything the shell log says about the plugin: `qs log --pid \"$(pgrep -f 'quickshell -n -p')\" | grep -i sallah`"
+      render: text
