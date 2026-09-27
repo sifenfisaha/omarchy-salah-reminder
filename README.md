@@ -154,6 +154,10 @@ Hyprland reloads on save; `hyprctl configerrors` should come back empty.
 
 Today's table is also written to `~/.local/state/omarchy/sallah/state.json` as
 ISO timestamps, for scripts that want it without reimplementing the astronomy.
+Next to it, `announced.json` records which prayers have already been announced,
+by day and minute, so neither a shell reload nor a restart plays an adhan twice,
+and a prayer whose time you nudge after it sounded is announced again at the
+new time.
 
 ## Configuration
 

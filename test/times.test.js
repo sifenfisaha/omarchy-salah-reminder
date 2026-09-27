@@ -167,6 +167,20 @@ check("Valid config keeps its own values", M.parseConfig('{"method": "Egypt"}').
 check("Valid config fills omitted keys from defaults",
   M.parseConfig('{"method": "Egypt", "audio": {"volume": 40}}').audio.enabled, true);
 
+// --- Announcements --------------------------------------------------------
+// A prayer whose time moves is a new announcement; the same time is not.
+{
+  const isha = new Date(2026, 8, 27, 19, 24);
+  check("Announcement stamp carries day, prayer and minute",
+    M.announceStamp(isha, "isha"), "2026-09-27:isha:19:24");
+  check("A nudged prayer gets a new stamp",
+    M.announceStamp(new Date(2026, 8, 27, 19, 3), "isha") !== M.announceStamp(isha, "isha"), true);
+  const round = M.parseAnnounced(M.serializeAnnounced(["2026-09-27:isha:19:24"], "2026-9-27"));
+  check("Announced list round-trips", round.announced.join("|"), "2026-09-27:isha:19:24");
+  check("Hijri sync day round-trips", round.hijriSyncDay, "2026-9-27");
+  check("Garbage announced file reads as nothing announced", M.parseAnnounced("nope").announced.length, 0);
+}
+
 // --- Report ---------------------------------------------------------------
 if (failures.length) {
   console.error(`\n  ${failures.length} failed, ${pass} passed\n`);
