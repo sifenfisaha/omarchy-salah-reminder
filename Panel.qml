@@ -1,0 +1,1383 @@
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import qs.Commons
+import qs.Ui
+import "PrayerTimes.js" as PrayerTimes
+import "Model.js" as Model
+import "Hijri.js" as Hijri
+
+// The popup: today's table, where you are in it, and everything that decides
+// those numbers.
+//
+// Two views share one surface — the day, and the settings behind it — because
+// the questions that send someone to the settings ("why is Asr at 15:32?") are
+// asked while looking at the day. Crossfading in place keeps the answer next to
+// the thing that prompted it.
+Panel {
+  id: root
+  moduleName: "sallah.reminder"
+  ipcTarget: "sallah.reminder.panel"
+  manageIpc: false
+
+  property var anchorItem: null
+  property var hostWidget: null
+  property bool openedFromHotkey: false
+
+  // The bar tracks the widget mounted in its slot, not this nested panel, so
+  // everything the bar identifies a panel by has to be that widget.
+  readonly property var barIdentity: hostWidget || root
+
+  readonly property string home: Quickshell.env("HOME")
+
+  property var config: Model.defaults()
+  property var weatherLocation: ({ name: "", latitude: null, longitude: null })
+  property var ipLocation: null
+  property var day: null
+  property var rightNow: new Date()
+
+  property string view: "today"
+  property string locationQuery: ""
+  property var locationSuggestions: []
+  property bool locating: false
+
+  readonly property var location: Model.effectiveLocation(config, weatherLocation, ipLocation)
+  readonly property string locationName: location
+    ? (String(location.name || "").length > 0
+        ? location.name
+        : Number(location.latitude).toFixed(2) + ", " + Number(location.longitude).toFixed(2))
+    : ""
+
+  readonly property color fg: bar ? bar.foreground : Color.foreground
+  readonly property color dim: Qt.darker(fg, 1.45)
+  readonly property color dimmer: Qt.rgba(fg.r, fg.g, fg.b, 0.38)
+  readonly property color accent: bar ? bar.urgent : Color.urgent
+  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+
+  readonly property string nextLabel: (day && day.next) ? Model.prayerLabel(day.next.key) : ""
+  readonly property string nextLabelAr: (day && day.next) ? Model.prayerLabelAr(day.next.key) : ""
+  readonly property string nextIcon: (day && day.next) ? PrayerTimes.icon(day.next.key) : PrayerTimes.mosqueIcon()
+  readonly property string nextTime: (day && day.next) ? Model.formatTime(day.next.date, config.timeFormat) : "--:--"
+  readonly property string remaining: day ? Model.formatDuration(day.remainingMs) : ""
+
+  // ---------------------------------------------------------------- lifecycle
+  function open() {
+    openedFromHotkey = false
+    setCenterHoverRevealSuppressed(false)
+    root.controller.show()
+    root.refresh()
+  }
+
+  function openFromHotkey() {
+    openedFromHotkey = true
+    root.controller.show()
+    root.refresh()
+    // Set after showing: showing hands the popout coordinator over, which
+    // closes whichever panel was open, and that close clears the shared flag.
+    Qt.callLater(function() {
+      if (root.opened) setCenterHoverRevealSuppressed(true)
+    })
+  }
+
+  function close() {
+    setCenterHoverRevealSuppressed(false)
+    root.view = "today"
+    root.locationSuggestions = []
+    root.controller.hide()
+  }
+
+  function toggle() {
+    if (root.opened) root.close()
+    else root.openFromHotkey()
+  }
+
+  function switchPanel(direction) {
+    if (root.bar && typeof root.bar.switchPanelFrom === "function")
+      return root.bar.switchPanelFrom(root.barIdentity, direction)
+    return false
+  }
+
+  function setCenterHoverRevealSuppressed(value) {
+    if (root.bar && typeof root.bar.setCenterHoverRevealSuppressed === "function")
+      root.bar.setCenterHoverRevealSuppressed(value)
+    else if (root.bar && "centerHoverRevealSuppressed" in root.bar)
+      root.bar.centerHoverRevealSuppressed = value
+  }
+
+  function refresh() {
+    configFile.reload()
+    weatherFile.reload()
+    recompute()
+  }
+
+  function recompute() {
+    root.rightNow = new Date()
+    root.day = Model.buildDay(root.rightNow, root.config, root.location)
+  }
+
+  onConfigChanged: recompute()
+  onLocationChanged: recompute()
+
+  Timer {
+    interval: 1000
+    running: root.opened
+    repeat: true
+    triggeredOnStart: true
+    onTriggered: root.recompute()
+  }
+
+  // ---------------------------------------------------------------- config io
+  FileView {
+    id: configFile
+    path: root.home + Model.CONFIG_PATH
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.config = Model.parseConfig(text())
+    onLoadFailed: root.config = Model.defaults()
+  }
+
+  FileView {
+    id: weatherFile
+    path: root.home + Model.WEATHER_LOCATION_PATH
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.weatherLocation = Model.parseWeatherLocation(text())
+    onLoadFailed: root.weatherLocation = Model.parseWeatherLocation("")
+  }
+
+  Process { id: writer }
+
+  // Applied to the in-memory copy first so the UI answers the click
+  // immediately; the file write comes back through FileView as the same value.
+  function patch(mutator) {
+    var next = JSON.parse(JSON.stringify(root.config))
+    mutator(next)
+    root.config = next
+    writer.command = ["sh", "-c",
+      "mkdir -p \"$(dirname \"$1\")\" && printf '%s' \"$2\" > \"$1\"",
+      "sh", root.home + Model.CONFIG_PATH, Model.serializeConfig(next)]
+    writer.running = true
+  }
+
+  function setValue(key, value) {
+    root.patch(function(c) { c[key] = value })
+  }
+
+  function setNested(group, key, value) {
+    root.patch(function(c) { c[group][key] = value })
+  }
+
+  function toggleAzan(key) {
+    root.patch(function(c) { c.azan[key] = c.azan[key] === false })
+  }
+
+  function chooseLocation(entry) {
+    root.patch(function(c) {
+      c.location = {
+        name: entry.label || entry.name,
+        latitude: entry.latitude,
+        longitude: entry.longitude,
+        source: "manual"
+      }
+    })
+    root.locationSuggestions = []
+    root.locationQuery = ""
+  }
+
+  function useWeatherLocation() {
+    root.patch(function(c) { c.location.source = "weather" })
+    root.locationSuggestions = []
+    root.locationQuery = ""
+  }
+
+  // ---------------------------------------------------------------- lookups
+  Process {
+    id: geocode
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.locating = false
+        root.locationSuggestions = Model.parseGeocodingResults(text)
+      }
+    }
+  }
+
+  Timer {
+    id: geocodeDebounce
+    interval: 320
+    onTriggered: {
+      var q = String(root.locationQuery || "").trim()
+      if (q.length < 2) {
+        root.locationSuggestions = []
+        return
+      }
+      root.locating = true
+      geocode.running = false
+      geocode.command = ["curl", "-fsS", "--max-time", "8",
+        "https://geocoding-api.open-meteo.com/v1/search?count=8&language=en&format=json&name=" + encodeURIComponent(q)]
+      geocode.running = true
+    }
+  }
+
+  onLocationQueryChanged: geocodeDebounce.restart()
+
+  Process {
+    id: ipLookup
+    command: ["curl", "-fsS", "--max-time", "6", "https://ipapi.co/json/"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.locating = false
+        var parsed = Model.parseIpLocation(text)
+        if (!parsed) return
+        root.ipLocation = parsed
+        root.chooseLocation({ label: parsed.name, latitude: parsed.latitude, longitude: parsed.longitude })
+      }
+    }
+  }
+
+  function detectLocation() {
+    if (ipLookup.running) return
+    root.locating = true
+    ipLookup.running = true
+  }
+
+  function run(command) {
+    if (root.bar) root.bar.run(command)
+  }
+
+  // ---------------------------------------------------------------- surface
+  KeyboardPanel {
+    id: panel
+    anchorItem: root.anchorItem
+    owner: root.barIdentity
+    bar: root.bar
+    open: root.opened
+    centerOnBar: true
+    focusTarget: keyCatcher
+    contentWidth: panel.fittedContentWidth(Style.space(430))
+    contentHeight: panel.fittedContentHeight(
+      root.view === "settings" ? settingsColumn.implicitHeight : todayColumn.implicitHeight)
+
+    PanelKeyCatcher {
+      id: keyCatcher
+      anchors.fill: parent
+      blocked: locationField.activeFocus || audioPathField.activeFocus
+      onCloseRequested: {
+        if (root.view === "settings") root.view = "today"
+        else root.close()
+      }
+      onTabRequested: function(direction) { root.switchPanel(direction) }
+
+      // ---- Today -------------------------------------------------------
+      Flickable {
+        id: todayScroll
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: todayColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        visible: opacity > 0
+        opacity: root.view === "today" ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 130; easing.type: Easing.OutQuad } }
+
+        Column {
+          id: todayColumn
+          width: todayScroll.width
+          spacing: Style.space(12)
+
+          // ---- Hero: progress ring, next prayer, countdown
+          Item {
+            width: parent.width
+            height: Math.max(ring.height, heroText.implicitHeight) + Style.space(18)
+            visible: root.location !== null
+
+            Item {
+              id: ring
+              width: Style.space(76)
+              height: width
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(18)
+              anchors.verticalCenter: parent.verticalCenter
+
+              Canvas {
+                id: ringCanvas
+                anchors.fill: parent
+                // Repaint whenever anything it draws from moves, including a
+                // theme switch — a stale ring in the old accent is the one
+                // artefact a canvas will happily keep showing.
+                property real progress: (root.day && root.day.progress !== null) ? root.day.progress : 0
+                property color trackColor: root.dimmer
+                property color fillColor: root.accent
+                onProgressChanged: requestPaint()
+                onTrackColorChanged: requestPaint()
+                onFillColorChanged: requestPaint()
+
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  var cx = width / 2
+                  var cy = height / 2
+                  var lw = Math.max(2, Math.round(width * 0.055))
+                  var r = width / 2 - lw
+                  ctx.lineWidth = lw
+                  ctx.lineCap = "round"
+
+                  ctx.strokeStyle = trackColor
+                  ctx.beginPath()
+                  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+                  ctx.stroke()
+
+                  if (progress > 0) {
+                    ctx.strokeStyle = fillColor
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress)
+                    ctx.stroke()
+                  }
+                }
+              }
+
+              Text {
+                anchors.centerIn: parent
+                textFormat: Text.PlainText
+                text: root.nextIcon
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Math.round(ring.width * 0.42)
+              }
+            }
+
+            Column {
+              id: heroText
+              anchors.left: ring.right
+              anchors.leftMargin: Style.space(16)
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(18)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(3)
+
+              Text {
+                textFormat: Text.PlainText
+                text: root.nextLabel === "" ? "—" : ("NEXT · " + root.nextLabel.toUpperCase())
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1.3
+              }
+
+              Row {
+                spacing: Style.space(8)
+
+                Text {
+                  id: heroTime
+                  textFormat: Text.PlainText
+                  text: root.nextTime
+                  color: root.fg
+                  font.family: root.fontFamily
+                  // Hero read-out, deliberately outside the Style.font.* scale.
+                  font.pixelSize: Math.round(Style.font.displayLarge * 1.55)
+                  font.bold: true
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  anchors.baseline: heroTime.baseline
+                  text: root.nextLabelAr
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.heading
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: root.remaining === "now" ? "it is time" : ("in " + root.remaining)
+                color: root.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+              }
+            }
+          }
+
+          // ---- No location yet
+          Column {
+            width: parent.width
+            visible: root.location === null
+            spacing: Style.space(10)
+            topPadding: Style.space(18)
+
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              textFormat: Text.PlainText
+              text: PrayerTimes.mosqueIcon()
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.displayLarge
+            }
+
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              textFormat: Text.PlainText
+              text: "Set a location to see prayer times"
+              color: root.fg
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              font.bold: true
+            }
+
+            Item {
+              width: parent.width
+              height: firstRunButton.implicitHeight
+
+              Button {
+                id: firstRunButton
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Choose a location"
+                iconText: ""
+                bordered: true
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                onClicked: root.view = "settings"
+              }
+            }
+          }
+
+          // ---- Hijri strip
+          Item {
+            width: parent.width
+            height: hijriRow.implicitHeight + Style.space(4)
+            visible: root.day !== null
+
+            Row {
+              id: hijriRow
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(8)
+
+              Text {
+                textFormat: Text.PlainText
+                text: ""
+                color: root.dimmer
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: root.day ? root.day.hijriText : ""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                visible: text !== ""
+                text: root.day ? Hijri.monthNote(root.day.hijri.month, root.day.hijri.day) : ""
+                color: root.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+          }
+
+          PanelSeparator { foreground: root.fg; visible: root.day !== null }
+
+          // ---- The six rows
+          Column {
+            width: parent.width
+            visible: root.day !== null
+
+            Repeater {
+              model: root.day ? root.day.rows : []
+
+              CursorSurface {
+                id: prayerRow
+                required property var modelData
+                required property int index
+
+                width: todayColumn.width
+                height: Style.space(38)
+                foreground: root.fg
+                accent: root.accent
+                current: modelData.isCurrent
+                hasCursor: rowHover.hovered
+                radius: Style.cornerRadius
+
+                HoverHandler { id: rowHover }
+
+                // Dim what has already passed so the eye lands on what is
+                // still ahead; the next prayer keeps full weight plus a mark.
+                readonly property real rowOpacity: modelData.isNext ? 1.0 : (modelData.isPast ? 0.42 : 0.82)
+
+                Rectangle {
+                  visible: prayerRow.modelData.isNext
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(2)
+                  height: parent.height * 0.55
+                  radius: width
+                  color: root.accent
+                }
+
+                Text {
+                  id: rowIcon
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.space(18)
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: PrayerTimes.icon(prayerRow.modelData.key)
+                  color: prayerRow.modelData.isNext ? root.accent : root.fg
+                  opacity: prayerRow.rowOpacity
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.icon
+                }
+
+                Text {
+                  id: rowName
+                  anchors.left: rowIcon.right
+                  anchors.leftMargin: Style.space(14)
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: prayerRow.modelData.label
+                  color: root.fg
+                  opacity: prayerRow.rowOpacity
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: prayerRow.modelData.isNext
+                }
+
+                Text {
+                  anchors.left: rowName.right
+                  anchors.leftMargin: Style.space(10)
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: prayerRow.modelData.labelAr
+                  color: root.dim
+                  opacity: prayerRow.rowOpacity
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Text {
+                  id: rowTime
+                  anchors.right: rowBell.left
+                  anchors.rightMargin: Style.space(10)
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: Model.formatTime(prayerRow.modelData.date, root.config.timeFormat)
+                  color: prayerRow.modelData.isNext ? root.accent : root.fg
+                  opacity: prayerRow.rowOpacity
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                }
+
+                // Sunrise is not prayed, so it gets no bell rather than a
+                // disabled one — nothing to decide, nothing to show.
+                PanelActionButton {
+                  id: rowBell
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: prayerRow.modelData.isPrayer
+                  iconText: prayerRow.modelData.azan ? "" : ""
+                  tooltipText: prayerRow.modelData.azan
+                    ? "Adhan on for " + prayerRow.modelData.label
+                    : "Adhan off for " + prayerRow.modelData.label
+                  foreground: prayerRow.modelData.azan ? root.fg : root.dimmer
+                  hoverColor: root.accent
+                  fontSize: Style.font.bodySmall
+                  onClicked: root.toggleAzan(prayerRow.modelData.key)
+                }
+              }
+            }
+          }
+
+          PanelSeparator { foreground: root.fg; visible: root.day !== null }
+
+          // ---- Derived times
+          Column {
+            width: parent.width
+            visible: root.day !== null
+            spacing: Style.space(6)
+
+            PanelSectionHeader {
+              x: Style.space(18)
+              text: "ALSO TODAY"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+            }
+
+            Grid {
+              x: Style.space(18)
+              width: parent.width - Style.space(36)
+              columns: 2
+              columnSpacing: Style.space(14)
+              rowSpacing: Style.space(5)
+
+              Repeater {
+                model: root.day ? [
+                  { label: "Imsak",      key: "imsak" },
+                  { label: "Duha",       key: "duha" },
+                  { label: "Sunset",     key: "sunset" },
+                  { label: "Midnight",   key: "midnight" },
+                  { label: "Last third", key: "lastThird" }
+                ] : []
+
+                Item {
+                  required property var modelData
+                  width: Math.floor((todayColumn.width - Style.space(50)) / 2)
+                  height: Style.space(20)
+
+                  Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: modelData.label
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+
+                  Text {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: root.day ? Model.formatTime(root.day.times[modelData.key], root.config.timeFormat) : ""
+                    color: root.fg
+                    opacity: 0.85
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                  }
+                }
+              }
+            }
+          }
+
+          PanelSeparator { foreground: root.fg; visible: root.day !== null }
+
+          // ---- Footer
+          Item {
+            width: parent.width
+            height: footerRow.implicitHeight + Style.space(12)
+
+            Column {
+              id: footerRow
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(18)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(2)
+
+              Row {
+                spacing: Style.space(6)
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: ""
+                  color: root.dimmer
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.locationName === "" ? "No location" : root.locationName
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: PrayerTimes.methodName(root.config.method) +
+                      " · " + (root.config.madhab === "Hanafi" ? "Hanafi" : "Standard")
+                color: root.dimmer
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                width: todayColumn.width - Style.space(150)
+                elide: Text.ElideRight
+              }
+            }
+
+            Row {
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(14)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(4)
+
+              PanelActionButton {
+                iconText: ""
+                tooltipText: "Play the adhan now"
+                foreground: root.fg
+                hoverColor: root.accent
+                onClicked: root.run("omarchy-shell sallah test")
+              }
+
+              PanelActionButton {
+                iconText: ""
+                tooltipText: "Stop the adhan"
+                foreground: root.fg
+                hoverColor: root.accent
+                onClicked: root.run("omarchy-shell sallah stop")
+              }
+
+              PanelActionButton {
+                iconText: ""
+                tooltipText: "Settings"
+                foreground: root.fg
+                hoverColor: root.accent
+                onClicked: root.view = "settings"
+              }
+            }
+          }
+        }
+      }
+
+      // ---- Settings ----------------------------------------------------
+      Flickable {
+        id: settingsScroll
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: settingsColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        visible: opacity > 0
+        opacity: root.view === "settings" ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 130; easing.type: Easing.OutQuad } }
+
+        Column {
+          id: settingsColumn
+          width: settingsScroll.width
+          spacing: Style.space(10)
+
+          // ---- Header with a way back
+          Item {
+            width: parent.width
+            height: Style.space(42)
+
+            Text {
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(18)
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: "SETTINGS"
+              color: root.fg
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              font.letterSpacing: 1.3
+            }
+
+            PanelActionButton {
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(12)
+              anchors.verticalCenter: parent.verticalCenter
+              iconText: ""
+              tooltipText: "Back to today"
+              foreground: root.fg
+              hoverColor: root.accent
+              onClicked: root.view = "today"
+            }
+          }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Location
+          Column {
+            x: Style.space(18)
+            width: settingsColumn.width - Style.space(36)
+            spacing: Style.space(7)
+
+            PanelSectionHeader { text: "LOCATION"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            TextField {
+              id: locationField
+              width: parent.width
+              placeholderText: "Search for a city…"
+              text: root.locationQuery
+              foreground: root.fg
+              accent: root.accent
+              font.family: root.fontFamily
+              onTextChanged: root.locationQuery = text
+            }
+
+            Text {
+              visible: root.locating
+              textFormat: Text.PlainText
+              text: "Searching…"
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Column {
+              width: parent.width
+              spacing: 1
+
+              Repeater {
+                model: root.locationSuggestions
+
+                CursorSurface {
+                  id: suggestion
+                  required property var modelData
+                  width: parent.width
+                  height: Style.space(28)
+                  foreground: root.fg
+                  accent: root.accent
+                  hasCursor: suggestionHover.hovered
+                  radius: Style.cornerRadius
+
+                  HoverHandler { id: suggestionHover; cursorShape: Qt.PointingHandCursor }
+                  TapHandler { onTapped: root.chooseLocation(suggestion.modelData) }
+
+                  Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Style.space(8)
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: suggestion.modelData.label
+                    color: root.fg
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    elide: Text.ElideRight
+                  }
+                }
+              }
+            }
+
+            Row {
+              spacing: Style.space(6)
+
+              Button {
+                text: "Use weather location"
+                bordered: true
+                fontSize: Style.font.caption
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                selected: root.config.location.source === "weather"
+                onClicked: root.useWeatherLocation()
+              }
+
+              Button {
+                text: "Detect"
+                iconText: ""
+                bordered: true
+                fontSize: Style.font.caption
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                onClicked: root.detectLocation()
+              }
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: root.locationName === ""
+                ? "Nothing set yet. Omarchy's weather location is used when you have one."
+                : "Using " + root.locationName
+              color: root.dimmer
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Calculation
+          Column {
+            x: Style.space(18)
+            width: settingsColumn.width - Style.space(36)
+            spacing: Style.space(8)
+
+            PanelSectionHeader { text: "CALCULATION"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            Dropdown {
+              width: parent.width
+              label: "Method"
+              value: root.config.method
+              foreground: root.fg
+              accent: root.accent
+              fontFamily: root.fontFamily
+              options: {
+                var keys = PrayerTimes.methodKeys()
+                var out = []
+                for (var i = 0; i < keys.length; i++) {
+                  out.push({ value: keys[i], label: PrayerTimes.methodInfo(keys[i]).name })
+                }
+                return out
+              }
+              onChanged: function(v) { root.setValue("method", v) }
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: PrayerTimes.methodInfo(root.config.method).region
+              color: root.dimmer
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Dropdown {
+              width: parent.width
+              label: "Asr (madhab)"
+              value: root.config.madhab
+              foreground: root.fg
+              accent: root.accent
+              fontFamily: root.fontFamily
+              options: [
+                { value: "Standard", label: "Standard — Shafi'i, Maliki, Hanbali" },
+                { value: "Hanafi", label: "Hanafi" }
+              ]
+              onChanged: function(v) { root.setValue("madhab", v) }
+            }
+
+            Dropdown {
+              width: parent.width
+              label: "High latitudes"
+              value: root.config.highLats
+              foreground: root.fg
+              accent: root.accent
+              fontFamily: root.fontFamily
+              options: [
+                { value: "AngleBased", label: "Angle based" },
+                { value: "NightMiddle", label: "Middle of the night" },
+                { value: "OneSeventh", label: "One seventh of the night" },
+                { value: "None", label: "None" }
+              ]
+              onChanged: function(v) { root.setValue("highLats", v) }
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: "Only matters far from the equator, where the sun never dips far enough below the horizon for Fajr and Isha to have a true angle."
+              color: root.dimmer
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Adhan
+          Column {
+            x: Style.space(18)
+            width: settingsColumn.width - Style.space(36)
+            spacing: Style.space(9)
+
+            PanelSectionHeader { text: "ADHAN & REMINDERS"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            Item {
+              width: parent.width
+              height: Style.space(24)
+
+              Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Desktop notification"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+
+              ToggleSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: root.config.notify
+                foreground: root.fg
+                accent: root.accent
+                onToggled: root.setValue("notify", !root.config.notify)
+              }
+            }
+
+            Item {
+              width: parent.width
+              height: Style.space(24)
+
+              Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Play the adhan"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+
+              ToggleSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: root.config.audio.enabled
+                foreground: root.fg
+                accent: root.accent
+                onToggled: root.setNested("audio", "enabled", !root.config.audio.enabled)
+              }
+            }
+
+            Column {
+              width: parent.width
+              spacing: Style.space(4)
+              opacity: root.config.audio.enabled ? 1 : 0.45
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                Text {
+                  width: Style.space(60)
+                  textFormat: Text.PlainText
+                  text: "Volume"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                PanelSlider {
+                  width: parent.width - Style.space(110)
+                  anchors.verticalCenter: parent.verticalCenter
+                  bar: root.bar
+                  minimum: 0
+                  maximum: 130
+                  step: 5
+                  integer: true
+                  value: root.config.audio.volume
+                  enabled: root.config.audio.enabled
+                  onReleased: function(v) { root.setNested("audio", "volume", Math.round(v)) }
+                }
+
+                Text {
+                  width: Style.space(34)
+                  horizontalAlignment: Text.AlignRight
+                  textFormat: Text.PlainText
+                  text: Math.round(root.config.audio.volume) + "%"
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+              }
+
+              TextField {
+                id: audioPathField
+                width: parent.width
+                placeholderText: "Custom adhan file — leave empty for the bundled one"
+                text: root.config.audio.path
+                enabled: root.config.audio.enabled
+                foreground: root.fg
+                accent: root.accent
+                font.family: root.fontFamily
+                onEditingFinished: root.setNested("audio", "path", text)
+              }
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(60)
+                textFormat: Text.PlainText
+                text: "Remind"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              PanelSlider {
+                width: parent.width - Style.space(140)
+                anchors.verticalCenter: parent.verticalCenter
+                bar: root.bar
+                minimum: 0
+                maximum: 45
+                step: 5
+                integer: true
+                value: root.config.reminderMinutes
+                onReleased: function(v) { root.setValue("reminderMinutes", Math.round(v)) }
+              }
+
+              Text {
+                width: Style.space(64)
+                horizontalAlignment: Text.AlignRight
+                textFormat: Text.PlainText
+                text: root.config.reminderMinutes > 0
+                  ? (Math.round(root.config.reminderMinutes) + " min before") : "off"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+          }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Display
+          Column {
+            x: Style.space(18)
+            width: settingsColumn.width - Style.space(36)
+            spacing: Style.space(8)
+
+            PanelSectionHeader { text: "DISPLAY"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            Dropdown {
+              width: parent.width
+              label: "Clock"
+              value: root.config.timeFormat
+              foreground: root.fg
+              accent: root.accent
+              fontFamily: root.fontFamily
+              options: [
+                { value: "24h", label: "24 hour" },
+                { value: "12h", label: "12 hour" }
+              ]
+              onChanged: function(v) { root.setValue("timeFormat", v) }
+            }
+
+            Dropdown {
+              width: parent.width
+              label: "Bar shows"
+              value: root.config.barMode
+              foreground: root.fg
+              accent: root.accent
+              fontFamily: root.fontFamily
+              options: [
+                { value: "countdown", label: "Name and countdown" },
+                { value: "time", label: "Name and time" },
+                { value: "both", label: "Name, time and countdown" }
+              ]
+              onChanged: function(v) { root.setValue("barMode", v) }
+            }
+
+            Item {
+              width: parent.width
+              height: Style.space(24)
+
+              Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Count seconds"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+
+              ToggleSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: root.config.showSeconds
+                foreground: root.fg
+                accent: root.accent
+                onToggled: root.setValue("showSeconds", !root.config.showSeconds)
+              }
+            }
+          }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Calendar
+          Column {
+            x: Style.space(18)
+            width: settingsColumn.width - Style.space(36)
+            spacing: Style.space(8)
+
+            PanelSectionHeader { text: "HIJRI CALENDAR"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            Item {
+              width: parent.width
+              height: Style.space(24)
+
+              Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Correct against Umm al-Qura"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+
+              ToggleSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: root.config.hijriSync
+                foreground: root.fg
+                accent: root.accent
+                onToggled: root.setValue("hijriSync", !root.config.hijriSync)
+              }
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Shift by"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              PanelActionButton {
+                iconText: ""
+                foreground: root.fg
+                hoverColor: root.accent
+                fontSize: Style.font.caption
+                enabled: root.config.hijriOffset > -2
+                onClicked: root.setValue("hijriOffset", Model.clamp(root.config.hijriOffset - 1, -2, 2))
+              }
+
+              Text {
+                width: Style.space(50)
+                horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText
+                text: (root.config.hijriOffset > 0 ? "+" : "") + root.config.hijriOffset + " day"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              PanelActionButton {
+                iconText: ""
+                foreground: root.fg
+                hoverColor: root.accent
+                fontSize: Style.font.caption
+                enabled: root.config.hijriOffset < 2
+                onClicked: root.setValue("hijriOffset", Model.clamp(root.config.hijriOffset + 1, -2, 2))
+              }
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: "Months begin on a local sighting, so mosques in one city can differ by a day. This shifts the displayed date without touching prayer times."
+              color: root.dimmer
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Per-prayer correction
+          Column {
+            x: Style.space(18)
+            width: settingsColumn.width - Style.space(36)
+            spacing: Style.space(5)
+            bottomPadding: Style.space(16)
+
+            PanelSectionHeader { text: "FINE TUNING"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: "Nudge an individual prayer to match your mosque's timetable."
+              color: root.dimmer
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              bottomPadding: Style.space(4)
+            }
+
+            Repeater {
+              model: PrayerTimes.PRAYER_NAMES
+
+              Item {
+                id: tuneRow
+                required property string modelData
+                readonly property int offset: Number(root.config.tune[modelData]) || 0
+
+                width: settingsColumn.width - Style.space(36)
+                height: Style.space(26)
+
+                Text {
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: Model.prayerLabel(tuneRow.modelData)
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Row {
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(6)
+
+                  PanelActionButton {
+                    iconText: ""
+                    foreground: root.fg
+                    hoverColor: root.accent
+                    fontSize: Style.font.caption
+                    enabled: tuneRow.offset > -60
+                    onClicked: root.setNested("tune", tuneRow.modelData, tuneRow.offset - 1)
+                  }
+
+                  Text {
+                    width: Style.space(52)
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: (tuneRow.offset > 0 ? "+" : "") + tuneRow.offset + " min"
+                    color: tuneRow.offset === 0 ? root.dimmer : root.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                  }
+
+                  PanelActionButton {
+                    iconText: ""
+                    foreground: root.fg
+                    hoverColor: root.accent
+                    fontSize: Style.font.caption
+                    enabled: tuneRow.offset < 60
+                    onClicked: root.setNested("tune", tuneRow.modelData, tuneRow.offset + 1)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Component.onCompleted: {
+    configFile.reload()
+    weatherFile.reload()
+  }
+}

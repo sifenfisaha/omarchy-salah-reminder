@@ -1,0 +1,164 @@
+#!/usr/bin/env node
+// Golden-value regression test for the prayer-time engine.
+//
+// The expectations below were cross-checked against api.aladhan.com, which
+// implements the same PrayTimes model, and independently against adhan-js.
+// Where the two references disagreed the value here sits between them; where
+// they agreed it matches both exactly.
+//
+//   node test/times.test.js
+//
+// No network and no dependencies: the point of the file is to catch a change
+// to the astronomy that nobody meant to make.
+
+const fs = require("fs");
+const path = require("path");
+
+// Expected values are local wall-clock times in Addis Ababa, so the test fixes
+// its own zone rather than depending on the machine it runs on. TZ has to be
+// set before the first Date is constructed, hence the re-exec.
+const TZ = "Africa/Addis_Ababa";
+if (process.env.TZ !== TZ) {
+  const { spawnSync } = require("child_process");
+  const r = spawnSync(process.execPath, [__filename], {
+    stdio: "inherit",
+    env: { ...process.env, TZ },
+  });
+  process.exit(r.status === null ? 1 : r.status);
+}
+
+function load(file) {
+  // The sources are QML JS libraries; strip the QML-only directives and
+  // satisfy their .import statements by hand.
+  const src = fs.readFileSync(path.join(__dirname, "..", file), "utf8")
+    .replace(/^\s*\.pragma\s+library\s*$/m, "")
+    .replace(/^\s*\.import\s+.*$/gm, "");
+  const mod = { exports: {} };
+  new Function("module", "exports", "PrayerTimes", "Hijri", src)(
+    mod, mod.exports, globalThis.PrayerTimes, globalThis.Hijri);
+  return mod.exports;
+}
+
+globalThis.PrayerTimes = load("PrayerTimes.js");
+globalThis.Hijri = load("Hijri.js");
+const PT = globalThis.PrayerTimes;
+const H = globalThis.Hijri;
+
+const hhmm = d => d
+  ? String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0")
+  : "--:--";
+
+let pass = 0;
+const failures = [];
+
+function check(name, actual, expected) {
+  if (actual === expected) { pass++; return; }
+  failures.push(`${name}\n      expected ${expected}\n      actual   ${actual}`);
+}
+
+function times(y, m, d, cfg) {
+  return PT.timesForDate(new Date(y, m - 1, d), cfg);
+}
+
+// --- Addis Ababa, the reference city -------------------------------------
+const ADDIS = { latitude: 9.0192, longitude: 38.7525 };
+
+const mwl = times(2026, 9, 27, { ...ADDIS, method: "MWL", asr: "Standard" });
+check("Addis MWL Fajr",    hhmm(mwl.fajr),    "05:04");
+check("Addis MWL Sunrise", hhmm(mwl.sunrise), "06:14");
+check("Addis MWL Dhuhr",   hhmm(mwl.dhuhr),   "12:16");
+check("Addis MWL Asr",     hhmm(mwl.asr),     "15:32");
+check("Addis MWL Maghrib", hhmm(mwl.maghrib), "18:18");
+check("Addis MWL Isha",    hhmm(mwl.isha),    "19:24");
+
+const hanafi = times(2026, 9, 27, { ...ADDIS, method: "MWL", asr: "Hanafi" });
+check("Addis Hanafi Asr", hhmm(hanafi.asr), "16:35");
+
+const egypt = times(2026, 9, 27, { ...ADDIS, method: "Egypt", asr: "Standard" });
+check("Addis Egypt Fajr", hhmm(egypt.fajr), "04:58");
+check("Addis Egypt Isha", hhmm(egypt.isha), "19:26");
+
+// Diyanet publishes fixed corrections on top of the angles; without them the
+// method silently returns times no mosque in Turkey would recognise.
+const turkey = times(2026, 9, 27, { ...ADDIS, method: "Turkey", asr: "Standard" });
+check("Turkey sunrise adjustment", hhmm(turkey.sunrise), "06:07");
+check("Turkey dhuhr adjustment",   hhmm(turkey.dhuhr),   "12:21");
+check("Turkey asr adjustment",     hhmm(turkey.asr),     "15:36");
+check("Turkey maghrib adjustment", hhmm(turkey.maghrib), "18:25");
+
+// Umm al-Qura defines Isha as a fixed interval after Maghrib, not an angle.
+const makkah = times(2026, 9, 27, { ...ADDIS, method: "Makkah", asr: "Standard" });
+check("Makkah Isha is Maghrib + 90",
+  Math.round((makkah.isha - makkah.maghrib) / 60000), 90);
+
+// --- Derived times --------------------------------------------------------
+check("Duha follows sunrise",
+  Math.round((mwl.duha - mwl.sunrise) / 60000), 15);
+check("Last third is after midnight point", mwl.lastThird > mwl.midnight, true);
+
+// --- Ordering invariants, swept across a whole year -----------------------
+// Ordering is the property a user notices instantly when it breaks, and the
+// one most likely to break quietly at an odd latitude or season.
+for (const place of [
+  { n: "Addis",   latitude: 9.0192,  longitude: 38.7525 },
+  { n: "Jakarta", latitude: -6.2088, longitude: 106.8456 },
+  { n: "London",  latitude: 51.5074, longitude: -0.1278 },
+  { n: "Oslo",    latitude: 59.9139, longitude: 10.7522 },
+]) {
+  let ordered = true;
+  let finite = true;
+  for (let doy = 1; doy <= 365; doy += 7) {
+    const d = new Date(2026, 0, doy);
+    const t = times(d.getFullYear(), d.getMonth() + 1, d.getDate(),
+      { ...place, method: "MWL", asr: "Standard", highLats: "AngleBased" });
+    for (const k of ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha"]) {
+      if (!t[k] || isNaN(t[k].getTime())) finite = false;
+    }
+    if (!(t.fajr < t.sunrise && t.sunrise < t.dhuhr &&
+          t.dhuhr < t.asr && t.asr < t.maghrib && t.maghrib < t.isha)) {
+      ordered = false;
+    }
+  }
+  check(`${place.n}: every prayer defined all year`, finite, true);
+  check(`${place.n}: prayers stay in order all year`, ordered, true);
+}
+
+// --- Schedule spans midnight ---------------------------------------------
+// At high latitudes Isha can land after midnight, which puts it on the previous
+// calendar day's table and off the next day's. The service announces from the
+// schedule rather than from one day's table precisely so that prayer still
+// fires; this pins that the schedule really does carry it.
+{
+  const oslo = { latitude: 59.9139, longitude: 10.7522, method: "MWL",
+                 asr: "Standard", highLats: "AngleBased" };
+  const jun = new Date(2026, 5, 21);
+  const table = PT.timesForDate(jun, oslo);
+
+  // Isha on 21 June in Oslo belongs to the small hours of the 22nd.
+  check("Oslo June Isha crosses midnight", table.isha.getDate(), 22);
+
+  // Standing just before it, the schedule must still offer it as next.
+  const justBefore = new Date(table.isha.getTime() - 60 * 1000);
+  const sched = PT.buildSchedule(justBefore, oslo);
+  const next = PT.findNext(sched, justBefore, false);
+  check("Oslo past-midnight Isha is reachable", next && next.key, "isha");
+  check("Oslo past-midnight Isha is the same moment",
+    next && next.date.getTime(), table.isha.getTime());
+}
+
+// --- Hijri ----------------------------------------------------------------
+// Anchors that a reader would notice being wrong.
+check("Ramadan 1447 begins 18 Feb 2026",
+  (() => { const h = H.fromGregorian(2026, 2, 19, 0); return `${h.day}/${h.month}`; })(), "2/9");
+check("Eid al-Fitr 1447 on 20 Mar 2026",
+  (() => { const h = H.fromGregorian(2026, 3, 20, 0); return `${h.day}/${h.month}`; })(), "1/10");
+check("Hijri offset shifts the day",
+  H.fromGregorian(2026, 9, 27, 2).day - H.fromGregorian(2026, 9, 27, 0).day, 2);
+
+// --- Report ---------------------------------------------------------------
+if (failures.length) {
+  console.error(`\n  ${failures.length} failed, ${pass} passed\n`);
+  failures.forEach(f => console.error("  ✗ " + f + "\n"));
+  process.exit(1);
+}
+console.log(`  ${pass} checks passed`);
