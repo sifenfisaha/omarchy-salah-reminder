@@ -118,7 +118,8 @@ right afterwards even offline. Turn it off for a fully offline plugin and use th
 manual shift instead.
 
 Months begin on a local sighting, so mosques in one city can legitimately differ
-by a day. The shift is there for that.
+by a day. The shift is there for that. Switching the correction off also forgets
+whatever it had learned, so the shift you set is the whole shift.
 
 ## Command line
 

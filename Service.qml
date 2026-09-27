@@ -269,6 +269,18 @@ Item {
     hijriSync.running = true
   }
 
+  // Switching the correction back on should not wait for tomorrow's check.
+  property bool hijriSyncWasOn: true
+
+  onConfigChanged: {
+    var on = !!root.config.hijriSync
+    if (on && !root.hijriSyncWasOn) {
+      root.hijriSyncDay = ""
+      root.maybeSyncHijri()
+    }
+    root.hijriSyncWasOn = on
+  }
+
   // ---------------------------------------------------------------- state file
   //
   // A machine-readable copy of today's table, so scripts, waybar setups, and
