@@ -188,6 +188,8 @@ Item {
   //
   // Only consulted when neither an explicit choice nor Omarchy's weather
   // location is available, so the common case makes no network call at all.
+  // A failed lookup — offline, or a rate-limited API — waits five minutes
+  // before trying again rather than retrying on the next tick.
   Process {
     id: ipLookup
     command: ["curl", "-fsS", "--max-time", "6", "https://ipapi.co/json/"]
@@ -200,8 +202,14 @@ Item {
     }
   }
 
+  property double ipLookupNotBefore: 0
+  readonly property int ipLookupRetrySeconds: 300
+
   function ensureLocation() {
     if (root.hasLocation || ipLookup.running) return
+    var now = Date.now()
+    if (now < root.ipLookupNotBefore) return
+    root.ipLookupNotBefore = now + root.ipLookupRetrySeconds * 1000
     ipLookup.running = true
   }
 
