@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Engine tests and manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      # Golden values against published timetables, ordering invariants across
+      # a year at four latitudes, config parsing, announcement stamps. No
+      # network; the test sets its own time zone.
+      - name: Engine and config tests
+        run: node test/times.test.js
+
+      # The checks `omarchy plugin validate` would run at install time that do
+      # not need Omarchy itself: the manifest parses, has the supported schema,
+      # and points at entry points that exist.
+      - name: Manifest and entry points
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+            if (m.schemaVersion !== 1) throw new Error("schemaVersion must be 1");
+            for (const key of ["id", "name", "version", "kinds", "entryPoints"]) {
+              if (!(key in m)) throw new Error("manifest is missing " + key);
+            }
+            for (const [kind, file] of Object.entries(m.entryPoints)) {
+              if (file.startsWith("/") || file.includes("..")) throw new Error(kind + " entry point must be a safe relative path");
+              fs.accessSync(file);
+              console.log(kind + " -> " + file);
+            }
+          '
