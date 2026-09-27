@@ -34,13 +34,14 @@ function load(file) {
     .replace(/^\s*\.pragma\s+library\s*$/m, "")
     .replace(/^\s*\.import\s+.*$/gm, "");
   const mod = { exports: {} };
-  new Function("module", "exports", "PrayerTimes", "Hijri", src)(
-    mod, mod.exports, globalThis.PrayerTimes, globalThis.Hijri);
+  new Function("module", "exports", "PrayerTimes", "Hijri", "Adhans", src)(
+    mod, mod.exports, globalThis.PrayerTimes, globalThis.Hijri, globalThis.Adhans);
   return mod.exports;
 }
 
 globalThis.PrayerTimes = load("lib/PrayerTimes.js");
 globalThis.Hijri = load("lib/Hijri.js");
+globalThis.Adhans = load("lib/Adhans.js");
 const PT = globalThis.PrayerTimes;
 const H = globalThis.Hijri;
 
@@ -166,6 +167,36 @@ check("Truncated config text is rejected, not defaulted",
 check("Valid config keeps its own values", M.parseConfig('{"method": "Egypt"}').method, "Egypt");
 check("Valid config fills omitted keys from defaults",
   M.parseConfig('{"method": "Egypt", "audio": {"volume": 40}}').audio.enabled, true);
+
+// --- Voices ---------------------------------------------------------------
+// The catalogue is data the service acts on blindly, so every entry must be
+// complete, and the config must keep an old custom path working.
+{
+  const A = globalThis.Adhans;
+  const ids = A.VOICES.map(v => v.id);
+  check("Voice ids are unique", new Set(ids).size, ids.length);
+  check("The bundled voice comes first", ids[0], "bundled");
+  check("A custom file is offered last", ids[ids.length - 1], "custom");
+  let complete = true;
+  for (const v of A.VOICES) {
+    if (!A.isDownloadable(v)) continue;
+    if (!/^https:\/\/commons\.wikimedia\.org\/wiki\/Special:FilePath\//.test(v.url)) complete = false;
+    if (!v.author || !v.licence || !v.page || !v.ext || !(v.bytes > 0) || !(v.seconds > 0)) complete = false;
+  }
+  check("Every downloadable voice has a Commons URL, credit, licence, type and size", complete, true);
+  check("An unknown voice id falls back to the bundled recording", A.voice("nope").id, "bundled");
+  check("Old config with a custom path keeps playing it",
+    M.parseConfig('{"audio": {"path": "~/adhan.ogg"}}').audio.adhan, "custom");
+  check("Old config without a custom path uses the bundled voice",
+    M.parseConfig('{"audio": {"path": ""}}').audio.adhan, "bundled");
+  check("A chosen voice survives alongside a custom path",
+    M.parseConfig('{"audio": {"adhan": "makkah", "path": "~/x.ogg"}}').audio.adhan, "makkah");
+  check("Unknown voice in the file resolves to bundled",
+    M.adhanSelection(M.parseConfig('{"audio": {"adhan": "gone"}}')), "bundled");
+  check("Cache path carries the id and the file type",
+    M.voiceCachePath(A.voice("makkah")), "/.local/state/omarchy/salah/adhan/makkah.webm");
+  check("Sizes read naturally", A.sizeText(2973696) + " " + A.sizeText(624640), "2.8 MB 610 KB");
+}
 
 // --- Announcements --------------------------------------------------------
 // A prayer whose time moves is a new announcement; the same time is not.

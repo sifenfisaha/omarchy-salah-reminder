@@ -4,6 +4,7 @@ import Quickshell.Io
 import "lib/PrayerTimes.js" as PrayerTimes
 import "lib/Model.js" as Model
 import "lib/Hijri.js" as Hijri
+import "lib/Adhans.js" as Adhans
 
 // The only part of the plugin that *acts*: it owns the adhan, the
 // notifications, and the two lookups that touch the network.
@@ -43,7 +44,10 @@ Item {
   property bool announcedLoaded: false
   readonly property bool ready: configLoaded && weatherLoaded && announcedLoaded
 
-  onReadyChanged: if (ready) root.maybeSyncHijri()
+  onReadyChanged: if (ready) {
+    root.maybeSyncHijri()
+    root.ensureVoice()
+  }
 
   // ---------------------------------------------------------------- files
   //
@@ -334,9 +338,99 @@ Item {
     }
   }
 
+  // ---------------------------------------------------------------- voice
+  //
+  // Which recording plays. Everything but the bundled one and a file of the
+  // user's own is fetched on request from Wikimedia Commons into the state
+  // directory. Until it has arrived, or if it never does, the bundled
+  // recording plays, so a prayer is never silent because of a download.
+  readonly property var voice: Adhans.voice(Model.adhanSelection(config))
+  // ready | downloading | failed. "ready" also covers the two voices that
+  // need no download.
+  property string voiceStatus: "ready"
+  property string voiceStatusText: ""
+  property string downloadingId: ""
+
+  // Wikimedia asks clients to say who they are.
+  readonly property string userAgent: "omarchy-salah-reminder (+https://github.com/sifenfisaha/omarchy-salah-reminder)"
+
+  onVoiceChanged: root.ensureVoice()
+
+  function voiceFile() {
+    return root.home + Model.voiceCachePath(root.voice)
+  }
+
+  // A `test -s` in a process rather than a FileView: a FileView would read the
+  // whole recording into memory just to learn that it exists.
+  Process {
+    id: voiceProbe
+    onExited: function(exitCode, exitStatus) {
+      if (!Adhans.isDownloadable(root.voice)) return
+      if (exitCode === 0) {
+        root.voiceStatus = "ready"
+        root.voiceStatusText = ""
+      } else {
+        root.downloadVoice()
+      }
+    }
+  }
+
+  Process {
+    id: voiceDownload
+    onExited: function(exitCode, exitStatus) {
+      var finishedId = root.downloadingId
+      root.downloadingId = ""
+      if (finishedId === root.voice.id) {
+        if (exitCode === 0) {
+          root.voiceStatus = "ready"
+          root.voiceStatusText = ""
+        } else {
+          root.voiceStatus = "failed"
+          root.voiceStatusText = "Download failed. Check the connection and try again."
+        }
+        return
+      }
+      // The choice moved on while this one was in flight.
+      root.ensureVoice()
+    }
+  }
+
+  function ensureVoice() {
+    if (!root.ready) return
+    var v = root.voice
+    if (!Adhans.isDownloadable(v)) {
+      root.voiceStatus = "ready"
+      root.voiceStatusText = ""
+      return
+    }
+    // Let a download in flight finish; its exit handler re-checks the choice.
+    if (voiceDownload.running) return
+    voiceProbe.command = ["test", "-s", root.voiceFile()]
+    voiceProbe.running = true
+  }
+
+  function downloadVoice() {
+    var v = root.voice
+    root.downloadingId = v.id
+    root.voiceStatus = "downloading"
+    root.voiceStatusText = "Downloading " + Adhans.sizeText(v.bytes) + "…"
+    // Into a .part file first, and only counted as arrived when it is at least
+    // recording-sized, so a half-fetched or error-page file never plays.
+    voiceDownload.command = ["sh", "-c",
+      "mkdir -p \"$(dirname \"$2\")\" && curl -fsSL -A \"$3\" --max-time 900 -o \"$2.part\" \"$1\"" +
+      " && [ \"$(stat -c%s \"$2.part\")\" -gt 50000 ] && mv -f \"$2.part\" \"$2\"",
+      "sh", v.url, root.voiceFile(), root.userAgent]
+    voiceDownload.running = true
+  }
+
   function adhanPath() {
-    var custom = String(root.config.audio.path || "").trim()
-    if (custom.length > 0) return custom.replace(/^~/, root.home)
+    var v = root.voice
+    if (v.id === "custom") {
+      var custom = String(root.config.audio.path || "").trim()
+      if (custom.length > 0) return custom.replace(/^~/, root.home)
+      return root.bundledAdhan
+    }
+    if (Adhans.isDownloadable(v) && root.voiceStatus === "ready") return root.voiceFile()
     return root.bundledAdhan
   }
 
@@ -490,6 +584,7 @@ Item {
 
     function test(): void { root.playAdhan("test") }
     function stop(): void { root.stopAdhan() }
+    function fetch(): void { root.ensureVoice() }
     function next(): string {
       if (!root.day || !root.day.next) return "unknown"
       return Model.prayerLabel(root.day.next.key) + " " +

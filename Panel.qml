@@ -7,6 +7,7 @@ import "components"
 import "lib/PrayerTimes.js" as PrayerTimes
 import "lib/Model.js" as Model
 import "lib/Hijri.js" as Hijri
+import "lib/Adhans.js" as Adhans
 
 // The popup: today's table, where you are in it, and everything that decides
 // those numbers.
@@ -82,6 +83,25 @@ Panel {
   readonly property string playingPrayer: service ? String(service.playingPrayer || "") : ""
   readonly property bool adhanPlaying: playingPrayer !== ""
   readonly property bool volumeMuted: Math.round(Number(config.audio.volume) || 0) <= 0
+
+  // The voice, and what the service says about fetching it. The service owns
+  // the download; with no service the caption falls back to the credit alone.
+  readonly property var voice: Adhans.voice(Model.adhanSelection(config))
+  readonly property string voiceStatus: service ? String(service.voiceStatus || "") : ""
+  readonly property string voiceStatusText: service ? String(service.voiceStatusText || "") : ""
+  readonly property string voiceCaption: {
+    var v = voice
+    if (v.id === "custom") return "Anything mpv can play. Leave the path empty for the bundled recording."
+    var parts = [v.detail + ", " + Adhans.durationText(v.seconds)]
+    var credit = Adhans.attribution(v)
+    if (credit) parts.push(credit)
+    if (Adhans.isDownloadable(v)) {
+      if (voiceStatus === "ready") parts.push("downloaded")
+      else if (voiceStatus === "downloading" || voiceStatus === "failed") parts.push(voiceStatusText)
+      else parts.push(Adhans.sizeText(v.bytes) + " download, the bundled recording plays until it arrives")
+    }
+    return parts.join(" · ")
+  }
   readonly property string playingLabel: (playingPrayer === "" || playingPrayer === "test")
     ? "" : Model.prayerLabel(playingPrayer)
 
@@ -1277,6 +1297,40 @@ Panel {
               spacing: Style.space(4)
               opacity: root.config.audio.enabled ? 1 : 0.45
 
+              SettingsDropdown {
+                width: parent.width
+                label: "Voice"
+                source: Model.adhanSelection(root.config)
+                enabled: root.config.audio.enabled
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                options: Adhans.options()
+                onChanged: function(v) { root.setNested("audio", "adhan", v) }
+              }
+
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                text: root.voiceCaption
+                color: root.voiceStatus === "failed" ? root.accent : root.dimmer
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Button {
+                visible: root.voiceStatus === "failed"
+                text: "Try the download again"
+                iconText: "\uf021"
+                bordered: true
+                fontSize: Style.font.caption
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                onClicked: root.run("omarchy-shell salah fetch")
+              }
+
               Row {
                 width: parent.width
                 spacing: Style.space(8)
@@ -1335,6 +1389,7 @@ Panel {
               TextField {
                 id: audioPathField
                 width: parent.width
+                visible: root.voice.id === "custom"
                 placeholderText: "Custom adhan file — leave empty for the bundled one"
                 text: root.config.audio.path
                 enabled: root.config.audio.enabled

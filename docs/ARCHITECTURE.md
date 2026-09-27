@@ -107,6 +107,14 @@ the old one has exited, so a Play during playback is parked in `pendingPrayer`
 and started from the exit handler; doing it directly cleared the playing state
 after it had been set for the new adhan.
 
+The recording that plays is the voice chosen in settings, from the catalogue in
+`lib/Adhans.js`. Only the bundled one ships with the plugin; the others are
+fetched from Wikimedia Commons into `~/.local/state/omarchy/salah/adhan/` the
+first time they are chosen, with a `test -s` probe rather than a `FileView` to
+learn whether the file is there, and a `.part` file that only becomes the real
+one once it is recording-sized. Until then, or if the download fails, the
+bundled recording plays, so a prayer is never silent because of the network.
+
 ## Quickshell behaviours worth knowing
 
 These have each cost a debugging session. Check them before assuming the code

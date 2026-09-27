@@ -6,6 +6,16 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A **Voice** setting. Besides the bundled recording it offers live
+  recordings from the Prophet's Mosque in Madinah and from Masjid al-Haram in
+  Makkah, a studio recitation by Aaqib Azeez, and a mosque recording from
+  Nigeria, each fetched from Wikimedia Commons the first time it is chosen and
+  credited under the setting. The bundled recording plays until a download
+  has arrived. A file of your own is still an option, and an existing custom
+  path keeps working. `omarchy-shell salah fetch` retries a failed download.
+
 ### Fixed
 
 - The configuration could silently reset to defaults. Rewriting `config.json`
