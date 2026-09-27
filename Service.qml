@@ -292,9 +292,26 @@ Item {
   }
 
   // ---------------------------------------------------------------- adhan
+  //
+  // One Process, restarted with a new command, is how a second Play works — but
+  // Quickshell only starts the new command once the old process has exited, and
+  // that exit used to clear playingPrayer *after* it had been set for the new
+  // one. The panel then showed nothing playing, with Stop disabled, while the
+  // adhan sounded. A Play during playback is therefore parked in pendingPrayer
+  // and started from the exit handler instead.
+  property string pendingPrayer: ""
+
   Process {
     id: player
-    onExited: root.playingPrayer = ""
+    onExited: {
+      if (root.pendingPrayer !== "") {
+        var key = root.pendingPrayer
+        root.pendingPrayer = ""
+        root.startPlayer(key)
+      } else {
+        root.playingPrayer = ""
+      }
+    }
   }
 
   function adhanPath() {
@@ -303,17 +320,28 @@ Item {
     return root.bundledAdhan
   }
 
-  function playAdhan(prayerKey) {
-    if (!root.config.audio.enabled) return
-    stopAdhan()
+  function startPlayer(prayerKey) {
     var volume = Model.clamp(root.config.audio.volume, 0, 150)
-    root.playingPrayer = prayerKey || "test"
+    root.playingPrayer = prayerKey
     player.command = ["mpv", "--no-video", "--really-quiet",
                       "--volume=" + volume, root.adhanPath()]
     player.running = true
   }
 
+  function playAdhan(prayerKey) {
+    if (!root.config.audio.enabled) return
+    var key = prayerKey || "test"
+    if (player.running) {
+      root.pendingPrayer = key
+      player.running = false
+      return
+    }
+    root.pendingPrayer = ""
+    root.startPlayer(key)
+  }
+
   function stopAdhan() {
+    root.pendingPrayer = ""
     if (player.running) player.running = false
     root.playingPrayer = ""
   }
