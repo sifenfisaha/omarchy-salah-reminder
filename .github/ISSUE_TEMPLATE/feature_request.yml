@@ -1,0 +1,23 @@
+name: Feature request
+description: Something the plugin should do, or do differently
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is missing or awkward today
+      description: The situation you are in and what the plugin does not do for you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+      description: How it should behave, and where in the bar or the panel it belongs.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including workarounds that already exist, such as a config key or a keybind.
