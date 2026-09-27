@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "sallah.reminder",
-  "name": "Sallah Reminder",
+  "id": "salah.reminder",
+  "name": "Salah Reminder",
   "version": "1.0.0",
   "author": "sifenfisaha",
   "description": "Prayer times in the bar, with the adhan and a full day view",
-  "homepage": "https://github.com/sifenfisaha/omarchy-sallah-reminder",
+  "homepage": "https://github.com/sifenfisaha/omarchy-salah-reminder",
   "license": "MIT",
   "kinds": [
     "service",
@@ -16,7 +16,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Sallah Reminder",
+    "displayName": "Salah Reminder",
     "description": "Next prayer and a live countdown, with the full day on click",
     "category": "Info",
     "allowMultiple": false,

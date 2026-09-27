@@ -1,6 +1,6 @@
-# Sallah Reminder
+# Salah Reminder
 
-[![CI](https://github.com/sifenfisaha/omarchy-sallah-reminder/actions/workflows/ci.yml/badge.svg)](https://github.com/sifenfisaha/omarchy-sallah-reminder/actions/workflows/ci.yml)
+[![CI](https://github.com/sifenfisaha/omarchy-salah-reminder/actions/workflows/ci.yml/badge.svg)](https://github.com/sifenfisaha/omarchy-salah-reminder/actions/workflows/ci.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
 Prayer times in the Omarchy bar, with the adhan and the whole day one click away.
@@ -16,13 +16,13 @@ night.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/sifenfisaha/omarchy-sallah-reminder.git --enable
+omarchy plugin add https://github.com/sifenfisaha/omarchy-salah-reminder.git --enable
 ```
 
 Pick a bar section when prompted, or place it yourself afterwards:
 
 ```bash
-omarchy bar move sallah.reminder --section center
+omarchy bar move salah.reminder --section center
 ```
 
 On first run the pill shows the plugin's mark. Click it, choose a location, and
@@ -45,7 +45,7 @@ the plugin never touches the network at all — prayer times are computed locall
 ### Removing it
 
 ```bash
-omarchy plugin remove sallah.reminder
+omarchy plugin remove salah.reminder
 ```
 
 That unloads it, takes it out of the bar, and leaves a timestamped backup
@@ -53,7 +53,7 @@ alongside. Your settings are deliberately left behind so a reinstall picks up
 where you left off; clear them yourself if you want a clean slate:
 
 ```bash
-rm -rf ~/.config/omarchy/sallah ~/.local/state/omarchy/sallah
+rm -rf ~/.config/omarchy/salah ~/.local/state/omarchy/salah
 ```
 
 The plugin writes nowhere else. It reads Omarchy's weather location but never
@@ -127,14 +127,14 @@ whatever it had learned, so the shift you set is the whole shift.
 ## Command line
 
 ```bash
-omarchy-shell sallah today     # the whole table
-omarchy-shell sallah next      # next prayer and how long
-omarchy-shell sallah test      # play the adhan
-omarchy-shell sallah stop      # stop it
-omarchy-shell sallah sync      # re-check the Hijri date now
+omarchy-shell salah today     # the whole table
+omarchy-shell salah next      # next prayer and how long
+omarchy-shell salah test      # play the adhan
+omarchy-shell salah stop      # stop it
+omarchy-shell salah sync      # re-check the Hijri date now
 
-omarchy-shell sallah.reminder toggle     # the panel
-omarchy-shell sallah.reminder settings   # straight to settings
+omarchy-shell salah.reminder toggle     # the panel
+omarchy-shell salah.reminder settings   # straight to settings
 ```
 
 Useful as Hyprland binds. Omarchy configures Hyprland in Lua, so these go in
@@ -143,8 +143,8 @@ Useful as Hyprland binds. Omarchy configures Hyprland in Lua, so these go in
 ```lua
 -- SUPER+P is "Pseudo window" by default, so unbind it before taking the key.
 hl.unbind("SUPER + P")
-o.bind("SUPER + P", "Prayer times", "omarchy-shell sallah.reminder toggle")
-o.bind("SUPER + SHIFT + ALT + P", "Silence adhan", "omarchy-shell sallah stop")
+o.bind("SUPER + P", "Prayer times", "omarchy-shell salah.reminder toggle")
+o.bind("SUPER + SHIFT + ALT + P", "Silence adhan", "omarchy-shell salah stop")
 ```
 
 Check what a key already does before claiming it — Omarchy binds most of the
@@ -156,7 +156,7 @@ omarchy menu keybindings --print | grep -i "SUPER + P"
 
 Hyprland reloads on save; `hyprctl configerrors` should come back empty.
 
-Today's table is also written to `~/.local/state/omarchy/sallah/state.json` as
+Today's table is also written to `~/.local/state/omarchy/salah/state.json` as
 ISO timestamps, for scripts that want it without reimplementing the astronomy.
 Next to it, `announced.json` records which prayers have already been announced,
 by day and minute, so neither a shell reload nor a restart plays an adhan twice,
@@ -165,7 +165,7 @@ new time.
 
 ## Configuration
 
-Everything in the panel is stored in `~/.config/omarchy/sallah/config.json`,
+Everything in the panel is stored in `~/.config/omarchy/salah/config.json`,
 which is plain JSON and safe to hand-edit or keep in version control — the shell
 picks up changes as you save.
 
@@ -217,8 +217,8 @@ how the pieces fit and lists the Quickshell behaviours that have bitten this
 code before. The short version:
 
 ```bash
-git clone https://github.com/sifenfisaha/omarchy-sallah-reminder.git \
-  ~/.config/omarchy/plugins/sallah.reminder
+git clone https://github.com/sifenfisaha/omarchy-salah-reminder.git \
+  ~/.config/omarchy/plugins/salah.reminder
 omarchy restart shell         # after every change: the hot reload keeps cached code
 node test/times.test.js       # sets its own timezone
 omarchy plugin validate .     # the checks the shell enforces

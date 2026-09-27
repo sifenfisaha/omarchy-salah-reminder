@@ -4,7 +4,7 @@ Three surfaces, one file, and one part that acts. Keep that shape and most
 changes stay small.
 
 ```
-                 ~/.config/omarchy/sallah/config.json
+                 ~/.config/omarchy/salah/config.json
                     ▲ writes            ▲ writes (hijri correction)
                     │                   │
    ┌────────────────┴───┐   ┌───────────┴─────────┐   ┌─────────────────────┐
@@ -83,7 +83,7 @@ not survive suspend, a clock correction, or a timezone change.
 Each prayer is identified by `Model.announceStamp`, which is the day, the
 prayer and the minute. A prayer whose time moves through a tune, a new method
 or a new city becomes a new announcement. Stamps are recorded in
-`~/.local/state/omarchy/sallah/announced.json` so that neither a reload nor a
+`~/.local/state/omarchy/salah/announced.json` so that neither a reload nor a
 restart announces a prayer twice, and a prayer whose moment passed while the
 machine was asleep is marked and skipped rather than fired on resume. The
 90-second grace window is what makes that distinction.

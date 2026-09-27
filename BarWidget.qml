@@ -15,7 +15,7 @@ import "lib/Model.js" as Model
 // disabled or has not mounted yet.
 BarWidget {
   id: root
-  moduleName: "sallah.reminder"
+  moduleName: "salah.reminder"
 
   readonly property string home: Quickshell.env("HOME")
 
@@ -178,7 +178,7 @@ BarWidget {
   }
 
   IpcHandler {
-    target: "sallah.reminder"
+    target: "salah.reminder"
 
     function open(): void { root.open() }
     function close(): void { root.close() }
@@ -207,12 +207,12 @@ BarWidget {
     // takes, instead of painting a second label on top to recolour it.
     active: root.imminent
     tooltipText: root.location === null
-      ? "Sallah — no location set yet, click to choose one"
+      ? "Salah — no location set yet, click to choose one"
       : ""
 
     onPressed: function(b) {
       if (!root.bar) return
-      if (b === Qt.RightButton) root.bar.run("omarchy-shell sallah stop")
+      if (b === Qt.RightButton) root.bar.run("omarchy-shell salah stop")
       else if (b === Qt.MiddleButton) root.refresh()
       else root.togglePanel()
     }

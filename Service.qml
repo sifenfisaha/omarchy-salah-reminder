@@ -101,7 +101,7 @@ Item {
     onLoadFailed: function(error) {
       root.configLoaded = true
       if (error !== FileViewError.FileNotFound) {
-        console.warn("sallah: could not read " + path + ": " + error)
+        console.warn("salah: could not read " + path + ": " + error)
         return
       }
       // First run: materialise the file so the panel has something to edit and
@@ -110,7 +110,7 @@ Item {
       root.config = Model.defaults()
       if (root.dirsReady) root.writeConfig(root.config)
     }
-    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
+    onSaveFailed: function(error) { console.warn("salah: could not write " + path + ": " + error) }
   }
 
   FileView {
@@ -160,10 +160,10 @@ Item {
     }
     onLoadFailed: function(error) {
       // Absent on first run, which means exactly what an empty list means.
-      if (error !== FileViewError.FileNotFound) console.warn("sallah: could not read " + path + ": " + error)
+      if (error !== FileViewError.FileNotFound) console.warn("salah: could not read " + path + ": " + error)
       root.announcedLoaded = true
     }
-    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
+    onSaveFailed: function(error) { console.warn("salah: could not write " + path + ": " + error) }
   }
 
   function saveAnnounced() {
@@ -290,7 +290,7 @@ Item {
     path: root.home + Model.STATE_PATH
     atomicWrites: true
     printErrors: false
-    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
+    onSaveFailed: function(error) { console.warn("salah: could not write " + path + ": " + error) }
   }
 
   function writeState() {
@@ -370,7 +370,7 @@ Item {
 
   function notify(headline, body, glyph, urgency) {
     notifier.command = ["omarchy-notification-send",
-                        "--app-name", "sallah-reminder",
+                        "--app-name", "salah-reminder",
                         "-g", glyph || "",
                         "-u", urgency || "normal",
                         headline, body]
@@ -482,11 +482,11 @@ Item {
 
   // ---------------------------------------------------------------- ipc
   //
-  // `omarchy-shell sallah <command>` — lets the panel drive playback without
+  // `omarchy-shell salah <command>` — lets the panel drive playback without
   // reaching across into this object, and gives the user a scriptable surface
   // for keybinds.
   IpcHandler {
-    target: "sallah"
+    target: "salah"
 
     function test(): void { root.playAdhan("test") }
     function stop(): void { root.stopAdhan() }

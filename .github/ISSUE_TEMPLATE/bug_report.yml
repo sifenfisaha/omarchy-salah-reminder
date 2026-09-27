@@ -21,11 +21,11 @@ body:
     id: config
     attributes:
       label: Configuration
-      description: The contents of `~/.config/omarchy/sallah/config.json`, minus anything you would rather not share.
+      description: The contents of `~/.config/omarchy/salah/config.json`, minus anything you would rather not share.
       render: json
   - type: textarea
     id: log
     attributes:
       label: Shell log
-      description: "Anything the shell log says about the plugin: `qs log --pid \"$(pgrep -f 'quickshell -n -p')\" | grep -i sallah`"
+      description: "Anything the shell log says about the plugin: `qs log --pid \"$(pgrep -f 'quickshell -n -p')\" | grep -i salah`"
       render: text

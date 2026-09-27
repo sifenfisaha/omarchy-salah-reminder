@@ -17,8 +17,8 @@ import "lib/Hijri.js" as Hijri
 // the thing that prompted it.
 Panel {
   id: root
-  moduleName: "sallah.reminder"
-  ipcTarget: "sallah.reminder.panel"
+  moduleName: "salah.reminder"
+  ipcTarget: "salah.reminder.panel"
   manageIpc: false
 
   property var anchorItem: null
@@ -78,7 +78,7 @@ Panel {
   // allowed to look up its own service; if that ever returns null the panel
   // simply never shows the playing strip, which is the right way to fail.
   readonly property var service: (bar && bar.shell && typeof bar.shell.serviceFor === "function")
-    ? bar.shell.serviceFor("sallah.reminder") : null
+    ? bar.shell.serviceFor("salah.reminder") : null
   readonly property string playingPrayer: service ? String(service.playingPrayer || "") : ""
   readonly property bool adhanPlaying: playingPrayer !== ""
   readonly property bool volumeMuted: Math.round(Number(config.audio.volume) || 0) <= 0
@@ -195,7 +195,7 @@ Panel {
       root.config = Model.defaults()
       root.configMissing = true
     }
-    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
+    onSaveFailed: function(error) { console.warn("salah: could not write " + path + ": " + error) }
   }
 
   FileView {
@@ -475,7 +475,7 @@ Panel {
                 accent: root.accent
                 fontFamily: root.fontFamily
                 fontSize: Style.font.bodySmall
-                onClicked: root.run("omarchy-shell sallah stop")
+                onClicked: root.run("omarchy-shell salah stop")
               }
             }
           }
@@ -1254,7 +1254,7 @@ Panel {
                 accent: root.accent
                 fontFamily: root.fontFamily
                 active: root.adhanPlaying
-                onClicked: root.run("omarchy-shell sallah test")
+                onClicked: root.run("omarchy-shell salah test")
               }
 
               Button {
@@ -1268,7 +1268,7 @@ Panel {
                 enabled: root.adhanPlaying
                 // The kit's Button has no disabled look of its own.
                 opacity: enabled ? 1 : 0.45
-                onClicked: root.run("omarchy-shell sallah stop")
+                onClicked: root.run("omarchy-shell salah stop")
               }
             }
 

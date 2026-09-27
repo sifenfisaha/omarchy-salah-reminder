@@ -18,14 +18,14 @@ wording are all welcome.
 
 ## Running your own copy
 
-The shell loads the plugin from `~/.config/omarchy/plugins/sallah.reminder`.
+The shell loads the plugin from `~/.config/omarchy/plugins/salah.reminder`.
 Clone straight into that directory, or clone elsewhere and symlink it:
 
 ```bash
-git clone https://github.com/sifenfisaha/omarchy-sallah-reminder.git \
-  ~/.config/omarchy/plugins/sallah.reminder
+git clone https://github.com/sifenfisaha/omarchy-salah-reminder.git \
+  ~/.config/omarchy/plugins/salah.reminder
 omarchy restart shell
-omarchy bar move sallah.reminder --section center   # if the pill is not in the bar yet
+omarchy bar move salah.reminder --section center   # if the pill is not in the bar yet
 ```
 
 **Restart the shell after every change.** Saving a file under the plugins
@@ -37,9 +37,9 @@ panel, and the service alike.
 Useful while iterating:
 
 ```bash
-omarchy-shell sallah.reminder settings   # open the panel straight on settings
-omarchy-shell sallah today               # what the service thinks today looks like
-omarchy-shell sallah test                # play the adhan; `stop` stops it
+omarchy-shell salah.reminder settings   # open the panel straight on settings
+omarchy-shell salah today               # what the service thinks today looks like
+omarchy-shell salah test                # play the adhan; `stop` stops it
 ```
 
 ## Checks to run
@@ -55,7 +55,7 @@ order all year at high latitudes. If you touch `lib/`, add a check for what you
 changed; the file is plain node with no framework.
 
 Then try it for real: restart the shell, open the panel, change the setting you
-touched, and confirm `~/.config/omarchy/sallah/config.json` changes and the bar
+touched, and confirm `~/.config/omarchy/salah/config.json` changes and the bar
 follows.
 
 ## Reading the shell log
@@ -64,8 +64,8 @@ The running shell keeps a log that includes QML warnings and, at debug level,
 every file the plugin reads:
 
 ```bash
-qs log --pid "$(pgrep -f 'quickshell -n -p')" | grep -i sallah
-qs log --pid "$(pgrep -f 'quickshell -n -p')" -r '*.debug=true' --log-times | grep sallah/config.json
+qs log --pid "$(pgrep -f 'quickshell -n -p')" | grep -i salah
+qs log --pid "$(pgrep -f 'quickshell -n -p')" -r '*.debug=true' --log-times | grep salah/config.json
 ```
 
 A QML error in the plugin shows up here, not on the terminal.

@@ -16,7 +16,7 @@ All notable changes to this project are recorded here. The format follows
 - A prayer announced once was never announced again at a moved time, and a
   shell restart inside the grace window announced it twice. Announcements are
   now keyed by day, prayer and minute and remembered in
-  `~/.local/state/omarchy/sallah/announced.json`.
+  `~/.local/state/omarchy/salah/announced.json`.
 - Settings dropdowns kept showing their last pick after the file changed
   underneath them.
 - Pressing Play while the adhan was already playing left the panel showing
@@ -32,6 +32,15 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- "Salah" is now spelt the standard way everywhere, and the plugin id is
+  `salah.reminder`. That changes the `omarchy-shell salah` and
+  `salah.reminder` IPC targets, the notification source, the repository name,
+  and the configuration and state directories, now `~/.config/omarchy/salah`
+  and `~/.local/state/omarchy/salah`. To carry an existing install over: move
+  both old `sallah` directories to their new names, rename the plugin folder
+  under `~/.config/omarchy/plugins` to `salah.reminder`, replace
+  `sallah.reminder` in `~/.config/omarchy/shell.json` and in any keybinds,
+  and restart the shell.
 - Repository layout: the pure JavaScript engine now lives in `lib/`, reusable
   QML in `components/`. Contributor documentation, a changelog, issue and pull
   request templates, and a CI workflow were added.
@@ -49,5 +58,5 @@ All notable changes to this project are recorded here. The format follows
   and per-prayer fine tuning, computed locally with no network.
 - Location from a chosen city, Omarchy's weather location, or an IP lookup.
 - A daily Hijri correction against Umm al-Qura, with a manual shift.
-- A command-line surface through `omarchy-shell sallah` and a machine-readable
+- A command-line surface through `omarchy-shell salah` and a machine-readable
   `state.json`.
