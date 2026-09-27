@@ -3,9 +3,10 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "PrayerTimes.js" as PrayerTimes
-import "Model.js" as Model
-import "Hijri.js" as Hijri
+import "components"
+import "lib/PrayerTimes.js" as PrayerTimes
+import "lib/Model.js" as Model
+import "lib/Hijri.js" as Hijri
 
 // The popup: today's table, where you are in it, and everything that decides
 // those numbers.

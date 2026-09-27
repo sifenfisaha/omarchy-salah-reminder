@@ -1,9 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "PrayerTimes.js" as PrayerTimes
-import "Model.js" as Model
-import "Hijri.js" as Hijri
+import "lib/PrayerTimes.js" as PrayerTimes
+import "lib/Model.js" as Model
+import "lib/Hijri.js" as Hijri
 
 // The only part of the plugin that *acts*: it owns the adhan, the
 // notifications, and the two lookups that touch the network.

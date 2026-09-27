@@ -186,16 +186,17 @@ picks up changes as you save.
 ## Layout
 
 ```
-manifest.json     plugin declaration — one service, one bar widget
-Service.qml       the only part that acts: adhan, notifications, lookups
-BarWidget.qml     the bar pill
-Panel.qml         the day view and settings
-SettingsDropdown.qml  a dropdown that stays in step with the config file
-PrayerTimes.js    solar position, the method table, the schedule
-Hijri.js          Hijri conversion
-Model.js          config shape, formatting, the day model
-assets/adhan.ogg  bundled call to prayer (CC0)
-test/             golden-value regression test, no network
+manifest.json          plugin declaration — one service, one bar widget
+Service.qml            the only part that acts: adhan, notifications, lookups, state files
+BarWidget.qml          the bar pill
+Panel.qml              the day view and settings
+components/            reusable QML used by the panel
+lib/PrayerTimes.js     solar position, the method table, the schedule
+lib/Hijri.js           Hijri conversion
+lib/Model.js           config shape, formatting, the day model
+assets/adhan.ogg       bundled call to prayer (CC0)
+test/                  regression tests, plain node, no network
+docs/                  screenshots and ARCHITECTURE.md
 ```
 
 The bar widget and the panel each compute times themselves from the same config
