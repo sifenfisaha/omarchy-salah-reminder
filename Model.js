@@ -16,6 +16,11 @@ var CONFIG_PATH = CONFIG_DIR + "/config.json"
 var STATE_DIR = "/.local/state/omarchy/sallah"
 var STATE_PATH = STATE_DIR + "/state.json"
 
+// Prayers already announced. Lives beside state.json rather than in
+// PersistentProperties, which survive the reloads that plugin edits trigger
+// but not a restart of the shell.
+var ANNOUNCED_PATH = STATE_DIR + "/announced.json"
+
 // Omarchy's weather plugin already asks the user where they are. Reusing that
 // answer means most people never have to set a location twice.
 var WEATHER_LOCATION_PATH = "/.local/state/omarchy/settings/weather.json"
@@ -90,6 +95,37 @@ function parseConfig(text) {
 
 function serializeConfig(config) {
   return JSON.stringify(config, null, 2) + "\n"
+}
+
+// ------------------------------------------------------------------ announcements
+//
+// One announcement is identified by the prayer's day, name and minute. The
+// minute is deliberate: a prayer whose time moves — a tune, a new method, a
+// new city — becomes a new announcement rather than one already made.
+function announceStamp(date, key) {
+  return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+    ":" + key + ":" + pad(date.getHours()) + ":" + pad(date.getMinutes())
+}
+
+function parseAnnounced(text) {
+  var out = { announced: [], hijriSyncDay: "" }
+  try {
+    var json = JSON.parse(String(text || ""))
+    if (!isObject(json)) return out
+    if (json.announced instanceof Array) {
+      for (var i = 0; i < json.announced.length; i++) {
+        if (typeof json.announced[i] === "string") out.announced.push(json.announced[i])
+      }
+    }
+    if (typeof json.hijriSyncDay === "string") out.hijriSyncDay = json.hijriSyncDay
+  } catch (e) {
+    // Unreadable means the same as absent: nothing is known to be announced.
+  }
+  return out
+}
+
+function serializeAnnounced(announced, hijriSyncDay) {
+  return JSON.stringify({ announced: announced, hijriSyncDay: hijriSyncDay }, null, 2) + "\n"
 }
 
 // Omarchy's weather state file, so a location set once serves both plugins.
@@ -322,8 +358,10 @@ if (typeof module !== "undefined" && module.exports) {
     prayerLabel: prayerLabel, prayerLabelAr: prayerLabelAr,
     totalHijriOffset: totalHijriOffset, parseGeocodingResults: parseGeocodingResults,
     parseIpLocation: parseIpLocation, clamp: clamp,
+    announceStamp: announceStamp, parseAnnounced: parseAnnounced,
+    serializeAnnounced: serializeAnnounced,
     CONFIG_DIR: CONFIG_DIR, CONFIG_PATH: CONFIG_PATH,
-    STATE_DIR: STATE_DIR, STATE_PATH: STATE_PATH,
+    STATE_DIR: STATE_DIR, STATE_PATH: STATE_PATH, ANNOUNCED_PATH: ANNOUNCED_PATH,
     WEATHER_LOCATION_PATH: WEATHER_LOCATION_PATH
   }
 }

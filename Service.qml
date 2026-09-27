@@ -40,7 +40,8 @@ Item {
   // lookup on every shell start, even for someone who chose a city long ago.
   property bool configLoaded: false
   property bool weatherLoaded: false
-  readonly property bool ready: configLoaded && weatherLoaded
+  property bool announcedLoaded: false
+  readonly property bool ready: configLoaded && weatherLoaded && announcedLoaded
 
   onReadyChanged: if (ready) root.maybeSyncHijri()
 
@@ -48,8 +49,8 @@ Item {
   //
   // Both directories are created up front: a FileView write replaces the file
   // by rename, which needs the directory to exist, and on a fresh install it
-  // does not. The config is read once mkdir has finished, so a first-run write
-  // cannot land before its directory.
+  // does not. The config and the announcement record are read once mkdir has
+  // finished, so a first-run write cannot land before its directory.
   property bool dirsReady: false
 
   Process {
@@ -58,6 +59,7 @@ Item {
     onExited: {
       root.dirsReady = true
       configFile.reload()
+      announcedFile.reload()
     }
   }
 
@@ -134,31 +136,52 @@ Item {
     configFile.setText(Model.serializeConfig(next))
   }
 
-  // Prayers already announced, as "YYYY-MM-DD:key". Persisted so a shell reload
-  // — which plugin edits trigger constantly — cannot re-announce a prayer the
-  // user already heard.
-  PersistentProperties {
-    id: persisted
-    reloadableId: "sallah-reminder"
-    property string firedKeys: ""
-    property string lastHijriSync: ""
+  // ---------------------------------------------------------------- announced
+  //
+  // Prayers already announced, as "YYYY-MM-DD:key:HH:MM". Kept in the state
+  // directory rather than in PersistentProperties: those survive the reloads
+  // that plugin edits trigger, but not a restart, and a restart inside the
+  // grace window announced the same prayer twice. The minute is part of the
+  // stamp so a prayer whose time moves — a tune, a new method, a new city —
+  // is a new announcement rather than one already made.
+  property var announced: []
+  property string hijriSyncDay: ""
+
+  FileView {
+    id: announcedFile
+    path: root.home + Model.ANNOUNCED_PATH
+    atomicWrites: true
+    printErrors: false
+    onLoaded: {
+      var parsed = Model.parseAnnounced(text())
+      root.announced = parsed.announced
+      root.hijriSyncDay = parsed.hijriSyncDay
+      root.announcedLoaded = true
+    }
+    onLoadFailed: function(error) {
+      // Absent on first run, which means exactly what an empty list means.
+      if (error !== FileViewError.FileNotFound) console.warn("sallah: could not read " + path + ": " + error)
+      root.announcedLoaded = true
+    }
+    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
   }
 
-  function stampFor(date, key) {
-    return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + ":" + key
+  function saveAnnounced() {
+    announcedFile.setText(Model.serializeAnnounced(root.announced, root.hijriSyncDay))
   }
 
   function alreadyFired(stamp) {
-    return ("|" + persisted.firedKeys + "|").indexOf("|" + stamp + "|") !== -1
+    return root.announced.indexOf(stamp) !== -1
   }
 
   function markFired(stamp) {
-    var parts = persisted.firedKeys ? persisted.firedKeys.split("|") : []
-    parts.push(stamp)
-    // Two days of history is all the guard needs; trimming keeps the persisted
-    // string from growing without bound across a long-running session.
-    if (parts.length > 24) parts = parts.slice(parts.length - 24)
-    persisted.firedKeys = parts.join("|")
+    var next = root.announced.slice()
+    next.push(stamp)
+    // Two days of history is all the guard needs; trimming keeps the file
+    // from growing without bound.
+    if (next.length > 24) next = next.slice(next.length - 24)
+    root.announced = next
+    root.saveAnnounced()
   }
 
   // ---------------------------------------------------------------- location
@@ -210,7 +233,8 @@ Item {
                 next.hijriAutoOffset = delta
                 root.writeConfig(next)
               }
-              persisted.lastHijriSync = root.todayKey()
+              root.hijriSyncDay = root.todayKey()
+              root.saveAnnounced()
               return
             }
           }
@@ -229,7 +253,7 @@ Item {
 
   function maybeSyncHijri() {
     if (!root.ready || !root.config.hijriSync) return
-    if (persisted.lastHijriSync === root.todayKey()) return
+    if (root.hijriSyncDay === root.todayKey()) return
     if (hijriSync.running) return
     var d = new Date()
     var ds = ("0" + d.getDate()).slice(-2) + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + d.getFullYear()
@@ -354,7 +378,7 @@ Item {
       // to be marked, so skip them before they cost anything.
       if (elapsed > 86400) continue
 
-      var stamp = root.stampFor(entry.date, entry.key)
+      var stamp = Model.announceStamp(entry.date, entry.key)
 
       if (elapsed >= 0) {
         if (!root.alreadyFired(stamp)) {
@@ -434,7 +458,7 @@ Item {
       return out.join("   ")
     }
     function sync(): void {
-      persisted.lastHijriSync = ""
+      root.hijriSyncDay = ""
       root.maybeSyncHijri()
     }
   }
