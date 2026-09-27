@@ -1,5 +1,8 @@
 # Sallah Reminder
 
+[![CI](https://github.com/sifenfisaha/omarchy-sallah-reminder/actions/workflows/ci.yml/badge.svg)](https://github.com/sifenfisaha/omarchy-sallah-reminder/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 Prayer times in the Omarchy bar, with the adhan and the whole day one click away.
 
 ![the bar pill and the day view](docs/panel.png)
