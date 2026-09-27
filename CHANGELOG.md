@@ -8,13 +8,14 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
-- A **Voice** setting. Besides the bundled recording it offers live
-  recordings from the Prophet's Mosque in Madinah and from Masjid al-Haram in
-  Makkah, a studio recitation by Aaqib Azeez, and a mosque recording from
-  Nigeria, each fetched from Wikimedia Commons the first time it is chosen and
-  credited under the setting. The bundled recording plays until a download
-  has arrived. A file of your own is still an option, and an existing custom
-  path keeps working. `omarchy-shell salah fetch` retries a failed download.
+- A **Voice** setting. The default is now a live recording from the Prophet's
+  Mosque in Madinah, fetched from Wikimedia Commons the first time the plugin
+  runs; the bundled recording plays until it has arrived. The setting also
+  offers a live recording from Masjid al-Haram in Makkah, a studio recitation
+  by Aaqib Azeez, a mosque recording from Nigeria, the bundled recording for a
+  plugin that never touches the network, and a file of your own. Each
+  download is credited under the setting, an existing custom path keeps
+  working, and `omarchy-shell salah fetch` retries a failed download.
 
 ### Fixed
 

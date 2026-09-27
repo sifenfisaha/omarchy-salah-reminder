@@ -40,8 +40,9 @@ the source to find out what gets executed.
 | `omarchy-notification-send` | Desktop notifications |
 
 None of the network calls are required. With a location set, Hijri sync off,
-and the bundled voice, the plugin never touches the network at all — prayer
-times are computed locally.
+and the bundled voice chosen, the plugin never touches the network at all —
+prayer times are computed locally. The default voice is the one exception: it
+is fetched once, the first time the plugin runs.
 
 ### Removing it
 
@@ -106,14 +107,16 @@ At each prayer you get a desktop notification and, unless you have turned it off
 for that prayer, the adhan. The bell on each row in the day view toggles that
 prayer on its own — Fajr silent on a work laptop, the rest audible, say.
 
-A 42-second CC0 recording ships with the plugin. **Voice** in the settings
-offers more: live recordings from the Prophet's Mosque in Madinah and from
-Masjid al-Haram in Makkah, a studio recitation by Aaqib Azeez, and a mosque
-recording from Nigeria. Those are not bundled. The first time you pick one it
-is downloaded from Wikimedia Commons into `~/.local/state/omarchy/salah/adhan/`
-and kept, and the bundled recording plays until it has arrived. Every one
-carries a free licence, and the credit it asks for is shown under the setting
-and listed in [NOTICE.md](NOTICE.md).
+The default voice is a live recording of the adhan from the Prophet's Mosque
+in Madinah. It is not bundled: the first time the plugin runs it is fetched
+from Wikimedia Commons, 2.8 MB, into `~/.local/state/omarchy/salah/adhan/` and
+kept, and until it has arrived a 42-second CC0 recording that ships with the
+plugin plays instead. **Voice** in the settings offers others, fetched the
+same way the first time they are chosen: a live recording from Masjid
+al-Haram in Makkah, a studio recitation by Aaqib Azeez, a mosque recording
+from Nigeria, and the bundled recording itself for a plugin that never
+touches the network. Every one carries a free licence, and the credit it asks
+for is shown under the setting and listed in [NOTICE.md](NOTICE.md).
 
 Recordings by the muezzins people ask for by name are copyrighted, so a free
 plugin cannot ship them. Pick **A file of your own** and point it at anything
@@ -188,7 +191,7 @@ picks up changes as you save.
 | `highLats` | `AngleBased`, `NightMiddle`, `OneSeventh`, `None` |
 | `tune` | Per-prayer correction in minutes |
 | `azan` | Per-prayer adhan on/off |
-| `audio` | `{enabled, adhan, path, volume}` — `adhan` is a voice id (`bundled`, `madinah`, `makkah`, `aaqib-azeez`, `nigeria`) or `custom`, which plays `path`; `volume` is an mpv percentage, so above 100 amplifies |
+| `audio` | `{enabled, adhan, path, volume}` — `adhan` is a voice id (`madinah` by default, `makkah`, `aaqib-azeez`, `nigeria`, `bundled`) or `custom`, which plays `path`; `volume` is an mpv percentage, so above 100 amplifies |
 | `notify` | Desktop notification on/off |
 | `reminderMinutes` | Heads-up this many minutes before; `0` disables |
 | `hijriOffset` | Your own shift, −2 to +2 days |

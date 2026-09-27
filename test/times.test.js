@@ -175,7 +175,10 @@ check("Valid config fills omitted keys from defaults",
   const A = globalThis.Adhans;
   const ids = A.VOICES.map(v => v.id);
   check("Voice ids are unique", new Set(ids).size, ids.length);
-  check("The bundled voice comes first", ids[0], "bundled");
+  check("The default voice is Madinah", A.DEFAULT, "madinah");
+  check("The default voice is listed first", ids[0], A.DEFAULT);
+  check("The fallback never needs the network", A.isDownloadable(A.voice(A.FALLBACK)), false);
+  check("Fresh defaults choose the default voice", M.defaults().audio.adhan, A.DEFAULT);
   check("A custom file is offered last", ids[ids.length - 1], "custom");
   let complete = true;
   for (const v of A.VOICES) {
@@ -187,8 +190,8 @@ check("Valid config fills omitted keys from defaults",
   check("An unknown voice id falls back to the bundled recording", A.voice("nope").id, "bundled");
   check("Old config with a custom path keeps playing it",
     M.parseConfig('{"audio": {"path": "~/adhan.ogg"}}').audio.adhan, "custom");
-  check("Old config without a custom path uses the bundled voice",
-    M.parseConfig('{"audio": {"path": ""}}').audio.adhan, "bundled");
+  check("Old config without a custom path takes the default voice",
+    M.parseConfig('{"audio": {"path": ""}}').audio.adhan, "madinah");
   check("A chosen voice survives alongside a custom path",
     M.parseConfig('{"audio": {"adhan": "makkah", "path": "~/x.ogg"}}').audio.adhan, "makkah");
   check("Unknown voice in the file resolves to bundled",
