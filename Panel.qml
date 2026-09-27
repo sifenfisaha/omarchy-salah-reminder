@@ -1445,7 +1445,12 @@ Panel {
                 checked: root.config.hijriSync
                 foreground: root.fg
                 accent: root.accent
-                onToggled: root.setValue("hijriSync", !root.config.hijriSync)
+                // Off means off: the learned correction goes too, so the shift
+                // shown below is the whole shift.
+                onToggled: root.patch(function(c) {
+                  c.hijriSync = !c.hijriSync
+                  if (!c.hijriSync) c.hijriAutoOffset = 0
+                })
               }
             }
 
