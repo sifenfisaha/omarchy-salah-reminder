@@ -155,6 +155,18 @@ check("Eid al-Fitr 1447 on 20 Mar 2026",
 check("Hijri offset shifts the day",
   H.fromGregorian(2026, 9, 27, 2).day - H.fromGregorian(2026, 9, 27, 0).day, 2);
 
+// --- Config file handling -------------------------------------------------
+// A watcher can catch config.json between two writes, and a hand edit can be
+// mid-typo. Neither may turn into a fresh default configuration: the three
+// consumers keep their last good config when parseConfig returns null.
+const M = load("Model.js");
+check("Empty config text is rejected, not defaulted", M.parseConfig(""), null);
+check("Truncated config text is rejected, not defaulted",
+  M.parseConfig('{"location": {"name": "Addis'), null);
+check("Valid config keeps its own values", M.parseConfig('{"method": "Egypt"}').method, "Egypt");
+check("Valid config fills omitted keys from defaults",
+  M.parseConfig('{"method": "Egypt", "audio": {"volume": 40}}').audio.enabled, true);
+
 // --- Report ---------------------------------------------------------------
 if (failures.length) {
   console.error(`\n  ${failures.length} failed, ${pass} passed\n`);
