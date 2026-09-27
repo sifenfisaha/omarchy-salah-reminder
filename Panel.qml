@@ -1254,6 +1254,8 @@ Panel {
                 accent: root.accent
                 fontFamily: root.fontFamily
                 enabled: root.adhanPlaying
+                // The kit's Button has no disabled look of its own.
+                opacity: enabled ? 1 : 0.45
                 onClicked: root.run("omarchy-shell sallah stop")
               }
             }
