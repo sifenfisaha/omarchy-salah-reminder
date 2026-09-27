@@ -53,6 +53,19 @@ Panel {
         : Number(location.latitude).toFixed(2) + ", " + Number(location.longitude).toFixed(2))
     : ""
 
+  readonly property bool hasWeatherLocation: Model.hasCoordinates(weatherLocation)
+  // True only while the weather location is really the one in use. Choosing it
+  // with none set keeps the last city, and the button has to say so rather than
+  // light up as if the weather location had taken over.
+  readonly property bool usingWeatherLocation: hasWeatherLocation && location === weatherLocation
+  readonly property string locationCaption: location === null
+    ? "Nothing set yet. Omarchy's weather location is used when you have one."
+    : (usingWeatherLocation
+        ? "Using Omarchy's weather location, " + locationName
+        : (config.location.source === "weather" && !hasWeatherLocation
+            ? "Omarchy has no weather location yet, so " + locationName + " is still used."
+            : "Using " + locationName))
+
   readonly property color fg: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(fg, 1.45)
   readonly property color dimmer: Qt.rgba(fg.r, fg.g, fg.b, 0.38)
@@ -1027,7 +1040,9 @@ Panel {
                 foreground: root.fg
                 accent: root.accent
                 fontFamily: root.fontFamily
-                selected: root.config.location.source === "weather"
+                enabled: root.hasWeatherLocation
+                opacity: enabled ? 1 : 0.45
+                selected: root.usingWeatherLocation
                 onClicked: root.useWeatherLocation()
               }
 
@@ -1060,9 +1075,7 @@ Panel {
               width: parent.width
               textFormat: Text.PlainText
               wrapMode: Text.WordWrap
-              text: root.locationName === ""
-                ? "Nothing set yet. Omarchy's weather location is used when you have one."
-                : "Using " + root.locationName
+              text: root.locationCaption
               color: root.dimmer
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
