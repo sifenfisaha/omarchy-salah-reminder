@@ -39,7 +39,12 @@ Panel {
   property string view: "today"
   property string locationQuery: ""
   property var locationSuggestions: []
-  property bool locating: false
+  // A search or lookup that came back with nothing to show, in words.
+  property string locationNotice: ""
+  // Derived rather than bookkept: a superseded search and its replacement
+  // share one Process, and hand-set flags fell out of step with it.
+  readonly property bool locating: (geocodeDebounce.running && String(locationQuery).trim().length >= 2)
+    || geocode.running || ipLookup.running
 
   readonly property var location: Model.effectiveLocation(config, weatherLocation, ipLocation)
   readonly property string locationName: location
@@ -94,7 +99,7 @@ Panel {
   function close() {
     setCenterHoverRevealSuppressed(false)
     root.view = "today"
-    root.locationSuggestions = []
+    root.cancelSearch()
     root.controller.hide()
   }
 
@@ -238,25 +243,47 @@ Panel {
         source: "manual"
       }
     })
-    root.locationSuggestions = []
-    root.locationQuery = ""
+    root.cancelSearch()
   }
 
   function useWeatherLocation() {
     root.patch(function(c) { c.location.source = "weather" })
+    root.cancelSearch()
+  }
+
+  // Drops the query, the suggestions, and any search still in flight.
+  function cancelSearch() {
+    geocodeDebounce.stop()
+    geocode.running = false
+    root.locationNotice = ""
     root.locationSuggestions = []
     root.locationQuery = ""
   }
 
   // ---------------------------------------------------------------- lookups
+  //
+  // Both lookups say what happened when they come back with nothing. A search
+  // that failed and a search that matched no city used to look identical —
+  // "Searching…" simply vanished — and so did a rate-limited Detect.
   Process {
     id: geocode
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        root.locating = false
-        root.locationSuggestions = Model.parseGeocodingResults(text)
+        var results = Model.parseGeocodingResults(text)
+        root.locationSuggestions = results
+        // An answer with nothing in it differs from no answer at all: curl -f
+        // leaves no body on a failure, and that case is reported from onExited.
+        var q = String(root.locationQuery || "").trim()
+        if (results.length === 0 && q.length >= 2 && String(text || "").trim() !== "")
+          root.locationNotice = "No city matches \u201c" + q + "\u201d."
       }
+    }
+    // A search superseded by a newer one is terminated, which reports as a
+    // crash exit; only curl's own failures are worth a message.
+    onExited: function(exitCode, exitStatus) {
+      if (exitStatus !== 0 || exitCode === 0) return
+      root.locationNotice = "City search failed. Check the connection and try again."
     }
   }
 
@@ -269,7 +296,6 @@ Panel {
         root.locationSuggestions = []
         return
       }
-      root.locating = true
       geocode.running = false
       geocode.command = ["curl", "-fsS", "--max-time", "8",
         "https://geocoding-api.open-meteo.com/v1/search?count=8&language=en&format=json&name=" + encodeURIComponent(q)]
@@ -277,7 +303,10 @@ Panel {
     }
   }
 
-  onLocationQueryChanged: geocodeDebounce.restart()
+  onLocationQueryChanged: {
+    root.locationNotice = ""
+    geocodeDebounce.restart()
+  }
 
   Process {
     id: ipLookup
@@ -285,9 +314,13 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        root.locating = false
         var parsed = Model.parseIpLocation(text)
-        if (!parsed) return
+        if (!parsed) {
+          // curl -f leaves no body on an HTTP error, so this covers being
+          // offline, a rate-limited API, and an unexpected answer alike.
+          root.locationNotice = "Could not detect a location. Check the connection, or search for a city instead."
+          return
+        }
         root.ipLocation = parsed
         root.chooseLocation({ label: parsed.name, latitude: parsed.latitude, longitude: parsed.longitude })
       }
@@ -296,7 +329,7 @@ Panel {
 
   function detectLocation() {
     if (ipLookup.running) return
-    root.locating = true
+    root.locationNotice = ""
     ipLookup.running = true
   }
 
@@ -1006,8 +1039,21 @@ Panel {
                 foreground: root.fg
                 accent: root.accent
                 fontFamily: root.fontFamily
+                enabled: !ipLookup.running
+                opacity: enabled ? 1 : 0.45
                 onClicked: root.detectLocation()
               }
+            }
+
+            Text {
+              width: parent.width
+              visible: root.locationNotice !== ""
+              textFormat: Text.PlainText
+              wrapMode: Text.WordWrap
+              text: root.locationNotice
+              color: root.accent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
             }
 
             Text {
