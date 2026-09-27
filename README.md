@@ -205,22 +205,23 @@ is disabled, and the two can never disagree. Every write replaces the file
 atomically, so a watcher never sees it half-written, and a file that fails to
 parse is ignored rather than treated as a fresh default.
 
-### Hacking on it
+## Contributing
+
+Bug reports, fixes, new calculation methods and better wording are all welcome.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers running your own copy, the checks to
+run, and the conventions; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains
+how the pieces fit and lists the Quickshell behaviours that have bitten this
+code before. The short version:
 
 ```bash
 git clone https://github.com/sifenfisaha/omarchy-sallah-reminder.git \
   ~/.config/omarchy/plugins/sallah.reminder
-omarchy-shell shell rescanPlugins
-```
-
-Saving a file under `~/.config/omarchy/plugins/` reloads it. Adding or renaming
-an **IPC function** is the exception — the handler is registered at load, so run
-`omarchy restart shell` for those.
-
-```bash
+omarchy restart shell         # after every change: the hot reload keeps cached code
 node test/times.test.js       # sets its own timezone
 omarchy plugin validate .     # the checks the shell enforces
 ```
+
+Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
