@@ -39,8 +39,8 @@ function load(file) {
   return mod.exports;
 }
 
-globalThis.PrayerTimes = load("PrayerTimes.js");
-globalThis.Hijri = load("Hijri.js");
+globalThis.PrayerTimes = load("lib/PrayerTimes.js");
+globalThis.Hijri = load("lib/Hijri.js");
 const PT = globalThis.PrayerTimes;
 const H = globalThis.Hijri;
 
@@ -159,7 +159,7 @@ check("Hijri offset shifts the day",
 // A watcher can catch config.json between two writes, and a hand edit can be
 // mid-typo. Neither may turn into a fresh default configuration: the three
 // consumers keep their last good config when parseConfig returns null.
-const M = load("Model.js");
+const M = load("lib/Model.js");
 check("Empty config text is rejected, not defaulted", M.parseConfig(""), null);
 check("Truncated config text is rejected, not defaulted",
   M.parseConfig('{"location": {"name": "Addis'), null);

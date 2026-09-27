@@ -3,8 +3,8 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "PrayerTimes.js" as PrayerTimes
-import "Model.js" as Model
+import "lib/PrayerTimes.js" as PrayerTimes
+import "lib/Model.js" as Model
 
 // The pill in the bar: which prayer is next, and how long is left.
 //
