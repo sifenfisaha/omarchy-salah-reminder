@@ -55,14 +55,24 @@ BarWidget {
   onConfigChanged: recompute()
   onLocationChanged: recompute()
 
+  // A file caught mid-edit, or a hand edit mid-typo, parses as null and leaves
+  // the last good configuration in place; only a missing file means defaults.
   FileView {
     id: configFile
     path: root.home + Model.CONFIG_PATH
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.config = Model.parseConfig(text())
-    onLoadFailed: root.config = Model.defaults()
+    onLoaded: {
+      var parsed = Model.parseConfig(text())
+      if (parsed) root.config = parsed
+      root.configMissing = false
+    }
+    onLoadFailed: function(error) {
+      if (error !== FileViewError.FileNotFound) return
+      root.config = Model.defaults()
+      root.configMissing = true
+    }
   }
 
   FileView {
@@ -71,8 +81,31 @@ BarWidget {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.weatherLocation = Model.parseWeatherLocation(text())
-    onLoadFailed: root.weatherLocation = Model.parseWeatherLocation("")
+    onLoaded: {
+      root.weatherLocation = Model.parseWeatherLocation(text())
+      root.weatherMissing = false
+    }
+    onLoadFailed: function(error) {
+      root.weatherLocation = Model.parseWeatherLocation("")
+      root.weatherMissing = error === FileViewError.FileNotFound
+    }
+  }
+
+  // Quickshell cannot watch a file that does not exist yet: the config is
+  // created by the service on first run, and Omarchy's weather location can
+  // appear at any time. Poll gently while either is missing; once a load
+  // succeeds the watcher takes over.
+  property bool configMissing: false
+  property bool weatherMissing: false
+
+  Timer {
+    interval: 3000
+    repeat: true
+    running: root.configMissing || root.weatherMissing
+    onTriggered: {
+      if (root.configMissing) configFile.reload()
+      if (root.weatherMissing) weatherFile.reload()
+    }
   }
 
   // One second while a seconds-precision countdown is on screen, otherwise five

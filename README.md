@@ -194,7 +194,9 @@ test/             golden-value regression test, no network
 
 The bar widget and the panel each compute times themselves from the same config
 file rather than asking the service, so the bar is still correct if the service
-is disabled, and the two can never disagree.
+is disabled, and the two can never disagree. Every write replaces the file
+atomically, so a watcher never sees it half-written, and a file that fails to
+parse is ignored rather than treated as a fresh default.
 
 ### Hacking on it
 

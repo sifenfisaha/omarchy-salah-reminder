@@ -11,8 +11,10 @@
 // between them at runtime — the config file is the only shared state, and the
 // service is the only thing that acts on the result.
 
-var CONFIG_PATH = "/.config/omarchy/sallah/config.json"
-var STATE_PATH = "/.local/state/omarchy/sallah/state.json"
+var CONFIG_DIR = "/.config/omarchy/sallah"
+var CONFIG_PATH = CONFIG_DIR + "/config.json"
+var STATE_DIR = "/.local/state/omarchy/sallah"
+var STATE_PATH = STATE_DIR + "/state.json"
 
 // Omarchy's weather plugin already asks the user where they are. Reusing that
 // answer means most people never have to set a location twice.
@@ -74,11 +76,15 @@ function numOrNull(v) {
   return isFinite(n) ? n : null
 }
 
+// Null, not defaults, when the text is not JSON. A watcher can catch the file
+// between two writes, and a hand edit can be mid-typo; the right answer to
+// both is to keep the last good configuration, not to replace it with a
+// fresh one.
 function parseConfig(text) {
   try {
     return mergeConfig(JSON.parse(String(text || "")))
   } catch (e) {
-    return defaults()
+    return null
   }
 }
 
@@ -316,7 +322,8 @@ if (typeof module !== "undefined" && module.exports) {
     prayerLabel: prayerLabel, prayerLabelAr: prayerLabelAr,
     totalHijriOffset: totalHijriOffset, parseGeocodingResults: parseGeocodingResults,
     parseIpLocation: parseIpLocation, clamp: clamp,
-    CONFIG_PATH: CONFIG_PATH, STATE_PATH: STATE_PATH,
+    CONFIG_DIR: CONFIG_DIR, CONFIG_PATH: CONFIG_PATH,
+    STATE_DIR: STATE_DIR, STATE_PATH: STATE_PATH,
     WEATHER_LOCATION_PATH: WEATHER_LOCATION_PATH
   }
 }

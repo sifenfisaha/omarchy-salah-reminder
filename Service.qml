@@ -35,6 +35,105 @@ Item {
   property var day: null
   property string playingPrayer: ""
 
+  // Nothing fires until every file has been read once. Before that the config
+  // is the built-in default — no location — and acting on it meant an IP
+  // lookup on every shell start, even for someone who chose a city long ago.
+  property bool configLoaded: false
+  property bool weatherLoaded: false
+  readonly property bool ready: configLoaded && weatherLoaded
+
+  onReadyChanged: if (ready) root.maybeSyncHijri()
+
+  // ---------------------------------------------------------------- files
+  //
+  // Both directories are created up front: a FileView write replaces the file
+  // by rename, which needs the directory to exist, and on a fresh install it
+  // does not. The config is read once mkdir has finished, so a first-run write
+  // cannot land before its directory.
+  property bool dirsReady: false
+
+  Process {
+    id: dirs
+    command: ["mkdir", "-p", root.home + Model.CONFIG_DIR, root.home + Model.STATE_DIR]
+    onExited: {
+      root.dirsReady = true
+      configFile.reload()
+    }
+  }
+
+  // Quickshell cannot watch a file that does not exist yet. The config is
+  // created below on first run, and Omarchy's weather location can appear at
+  // any time; while either is missing, poll gently, and once a load succeeds
+  // the watcher takes over.
+  property bool configMissing: false
+  property bool weatherMissing: false
+
+  Timer {
+    interval: 3000
+    repeat: true
+    running: root.configMissing || root.weatherMissing
+    onTriggered: {
+      if (root.configMissing) configFile.reload()
+      if (root.weatherMissing) weatherFile.reload()
+    }
+  }
+
+  // Writes go through the FileView with atomicWrites, so a watcher can never
+  // read the file half-written. Rewriting it in place used to leave whichever
+  // watcher read between the truncate and the write holding an empty file —
+  // which parsed as defaults — with the second change notification dropped
+  // because a read was already in flight.
+  FileView {
+    id: configFile
+    path: root.home + Model.CONFIG_PATH
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var parsed = Model.parseConfig(text())
+      if (parsed) root.config = parsed
+      root.configMissing = false
+      root.configLoaded = true
+    }
+    onLoadFailed: function(error) {
+      root.configLoaded = true
+      if (error !== FileViewError.FileNotFound) {
+        console.warn("sallah: could not read " + path + ": " + error)
+        return
+      }
+      // First run: materialise the file so the panel has something to edit and
+      // the user has a plain JSON file to hand-edit or keep in version control.
+      root.configMissing = true
+      root.config = Model.defaults()
+      if (root.dirsReady) root.writeConfig(root.config)
+    }
+    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
+  }
+
+  FileView {
+    id: weatherFile
+    path: root.home + Model.WEATHER_LOCATION_PATH
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      root.weatherLocation = Model.parseWeatherLocation(text())
+      root.weatherMissing = false
+      root.weatherLoaded = true
+    }
+    onLoadFailed: function(error) {
+      root.weatherLocation = Model.parseWeatherLocation("")
+      root.weatherMissing = error === FileViewError.FileNotFound
+      root.weatherLoaded = true
+    }
+  }
+
+  function writeConfig(next) {
+    root.config = next
+    configFile.setText(Model.serializeConfig(next))
+  }
+
   // Prayers already announced, as "YYYY-MM-DD:key". Persisted so a shell reload
   // — which plugin edits trigger constantly — cannot re-announce a prayer the
   // user already heard.
@@ -60,32 +159,6 @@ Item {
     // string from growing without bound across a long-running session.
     if (parts.length > 24) parts = parts.slice(parts.length - 24)
     persisted.firedKeys = parts.join("|")
-  }
-
-  // ---------------------------------------------------------------- config
-  FileView {
-    id: configFile
-    path: root.home + Model.CONFIG_PATH
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.config = Model.parseConfig(text())
-    onLoadFailed: {
-      // First run: materialise the file so the panel has something to edit and
-      // the user has a plain JSON file to hand-edit or keep in version control.
-      root.config = Model.defaults()
-      root.writeConfig(root.config)
-    }
-  }
-
-  FileView {
-    id: weatherFile
-    path: root.home + Model.WEATHER_LOCATION_PATH
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.weatherLocation = Model.parseWeatherLocation(text())
-    onLoadFailed: root.weatherLocation = Model.parseWeatherLocation("")
   }
 
   // ---------------------------------------------------------------- location
@@ -155,7 +228,7 @@ Item {
   }
 
   function maybeSyncHijri() {
-    if (!root.config.hijriSync) return
+    if (!root.ready || !root.config.hijriSync) return
     if (persisted.lastHijriSync === root.todayKey()) return
     if (hijriSync.running) return
     var d = new Date()
@@ -164,21 +237,17 @@ Item {
     hijriSync.running = true
   }
 
-  // ---------------------------------------------------------------- writing
-  Process { id: writer }
-
-  function writeConfig(next) {
-    root.config = next
-    var json = Model.serializeConfig(next)
-    writer.command = ["sh", "-c",
-      "mkdir -p \"$(dirname \"$1\")\" && printf '%s' \"$2\" > \"$1\"",
-      "sh", root.home + Model.CONFIG_PATH, json]
-    writer.running = true
-  }
-
+  // ---------------------------------------------------------------- state file
+  //
   // A machine-readable copy of today's table, so scripts, waybar setups, and
   // `cat` can see what the bar is showing without reimplementing the astronomy.
-  Process { id: stateWriter }
+  FileView {
+    id: stateFile
+    path: root.home + Model.STATE_PATH
+    atomicWrites: true
+    printErrors: false
+    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
+  }
 
   function writeState() {
     if (!root.day) return
@@ -195,10 +264,7 @@ Item {
       var row = root.day.rows[i]
       payload.times[row.key] = row.date ? row.date.toISOString() : null
     }
-    stateWriter.command = ["sh", "-c",
-      "mkdir -p \"$(dirname \"$1\")\" && printf '%s' \"$2\" > \"$1\"",
-      "sh", root.home + Model.STATE_PATH, JSON.stringify(payload, null, 2) + "\n"]
-    stateWriter.running = true
+    stateFile.setText(JSON.stringify(payload, null, 2) + "\n")
   }
 
   // ---------------------------------------------------------------- adhan
@@ -233,7 +299,7 @@ Item {
   function notify(headline, body, glyph, urgency) {
     notifier.command = ["omarchy-notification-send",
                         "--app-name", "sallah-reminder",
-                        "-g", glyph || "",
+                        "-g", glyph || "",
                         "-u", urgency || "normal",
                         headline, body]
     notifier.running = true
@@ -244,7 +310,7 @@ Item {
     var timeText = Model.formatTime(row.date, root.config.timeFormat)
     if (root.config.notify) {
       root.notify(row.label + " — " + timeText,
-                  "It is time for " + row.label + " prayer.", "", "normal")
+                  "It is time for " + row.label + " prayer.", "", "normal")
     }
     if (row.azan) root.playAdhan(row.key)
   }
@@ -253,7 +319,7 @@ Item {
     if (!root.config.notify) return
     root.notify(row.label + " in " + minutes + " min",
                 row.label + " at " + Model.formatTime(row.date, root.config.timeFormat),
-                "", "low")
+                "", "low")
   }
 
   // Fire anything due since the last tick. The grace window is what makes
@@ -263,6 +329,7 @@ Item {
   readonly property int graceSeconds: 90
 
   function tick() {
+    if (!root.ready) return
     var now = new Date()
     root.ensureLocation()
     if (!root.hasLocation) return
@@ -373,7 +440,7 @@ Item {
   }
 
   Component.onCompleted: {
-    configFile.reload()
+    dirs.running = true
     weatherFile.reload()
   }
 }

@@ -139,14 +139,33 @@ Panel {
   }
 
   // ---------------------------------------------------------------- config io
+  //
+  // Writes go through the FileView with atomicWrites, so the bar widget and
+  // the service — which watch the same file — can never read it half-written.
+  // Rewriting it in place used to leave whichever watcher read between the
+  // truncate and the write holding an empty file, which parsed as defaults;
+  // one more click would then have written those defaults over the real
+  // configuration.
   FileView {
     id: configFile
     path: root.home + Model.CONFIG_PATH
     watchChanges: true
+    atomicWrites: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.config = Model.parseConfig(text())
-    onLoadFailed: root.config = Model.defaults()
+    onLoaded: {
+      var parsed = Model.parseConfig(text())
+      if (parsed) root.config = parsed
+      root.configMissing = false
+    }
+    onLoadFailed: function(error) {
+      // Only a missing file means "start from defaults"; anything else keeps
+      // what is already loaded.
+      if (error !== FileViewError.FileNotFound) return
+      root.config = Model.defaults()
+      root.configMissing = true
+    }
+    onSaveFailed: function(error) { console.warn("sallah: could not write " + path + ": " + error) }
   }
 
   FileView {
@@ -155,11 +174,39 @@ Panel {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.weatherLocation = Model.parseWeatherLocation(text())
-    onLoadFailed: root.weatherLocation = Model.parseWeatherLocation("")
+    onLoaded: {
+      root.weatherLocation = Model.parseWeatherLocation(text())
+      root.weatherMissing = false
+    }
+    onLoadFailed: function(error) {
+      root.weatherLocation = Model.parseWeatherLocation("")
+      root.weatherMissing = error === FileViewError.FileNotFound
+    }
   }
 
-  Process { id: writer }
+  // Quickshell cannot watch a file that does not exist yet: the config is
+  // created by the service on first run, and Omarchy's weather location can
+  // appear at any time. Poll gently while either is missing; once a load
+  // succeeds the watcher takes over.
+  property bool configMissing: false
+  property bool weatherMissing: false
+
+  Timer {
+    interval: 3000
+    repeat: true
+    running: root.configMissing || root.weatherMissing
+    onTriggered: {
+      if (root.configMissing) configFile.reload()
+      if (root.weatherMissing) weatherFile.reload()
+    }
+  }
+
+  // The service creates this directory too, but saving a setting must not
+  // depend on the service being enabled.
+  Process {
+    id: dirs
+    command: ["mkdir", "-p", root.home + Model.CONFIG_DIR]
+  }
 
   // Applied to the in-memory copy first so the UI answers the click
   // immediately; the file write comes back through FileView as the same value.
@@ -167,10 +214,7 @@ Panel {
     var next = JSON.parse(JSON.stringify(root.config))
     mutator(next)
     root.config = next
-    writer.command = ["sh", "-c",
-      "mkdir -p \"$(dirname \"$1\")\" && printf '%s' \"$2\" > \"$1\"",
-      "sh", root.home + Model.CONFIG_PATH, Model.serializeConfig(next)]
-    writer.running = true
+    configFile.setText(Model.serializeConfig(next))
   }
 
   function setValue(key, value) {
@@ -1501,6 +1545,7 @@ Panel {
   }
 
   Component.onCompleted: {
+    dirs.running = true
     configFile.reload()
     weatherFile.reload()
   }
