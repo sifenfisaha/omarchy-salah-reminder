@@ -1033,10 +1033,10 @@ Panel {
 
             PanelSectionHeader { text: "CALCULATION"; foreground: root.fg; fontFamily: root.fontFamily }
 
-            Dropdown {
+            SettingsDropdown {
               width: parent.width
               label: "Method"
-              value: root.config.method
+              source: root.config.method
               foreground: root.fg
               accent: root.accent
               fontFamily: root.fontFamily
@@ -1061,10 +1061,10 @@ Panel {
               font.pixelSize: Style.font.caption
             }
 
-            Dropdown {
+            SettingsDropdown {
               width: parent.width
               label: "Asr (madhab)"
-              value: root.config.madhab
+              source: root.config.madhab
               foreground: root.fg
               accent: root.accent
               fontFamily: root.fontFamily
@@ -1075,10 +1075,10 @@ Panel {
               onChanged: function(v) { root.setValue("madhab", v) }
             }
 
-            Dropdown {
+            SettingsDropdown {
               width: parent.width
               label: "High latitudes"
-              value: root.config.highLats
+              source: root.config.highLats
               foreground: root.fg
               accent: root.accent
               fontFamily: root.fontFamily
@@ -1315,10 +1315,10 @@ Panel {
 
             PanelSectionHeader { text: "DISPLAY"; foreground: root.fg; fontFamily: root.fontFamily }
 
-            Dropdown {
+            SettingsDropdown {
               width: parent.width
               label: "Clock"
-              value: root.config.timeFormat
+              source: root.config.timeFormat
               foreground: root.fg
               accent: root.accent
               fontFamily: root.fontFamily
@@ -1329,10 +1329,10 @@ Panel {
               onChanged: function(v) { root.setValue("timeFormat", v) }
             }
 
-            Dropdown {
+            SettingsDropdown {
               width: parent.width
               label: "Bar shows"
-              value: root.config.barMode
+              source: root.config.barMode
               foreground: root.fg
               accent: root.accent
               fontFamily: root.fontFamily

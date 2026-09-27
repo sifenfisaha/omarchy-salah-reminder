@@ -189,6 +189,7 @@ manifest.json     plugin declaration — one service, one bar widget
 Service.qml       the only part that acts: adhan, notifications, lookups
 BarWidget.qml     the bar pill
 Panel.qml         the day view and settings
+SettingsDropdown.qml  a dropdown that stays in step with the config file
 PrayerTimes.js    solar position, the method table, the schedule
 Hijri.js          Hijri conversion
 Model.js          config shape, formatting, the day model
