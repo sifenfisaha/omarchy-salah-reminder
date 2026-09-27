@@ -148,6 +148,17 @@ Panel {
   onConfigChanged: recompute()
   onLocationChanged: recompute()
 
+  // Each view starts at its top. The Flickables keep their offset across a
+  // close, so settings used to reopen wherever they were last scrolled to,
+  // with the header and the search box out of sight.
+  onViewChanged: Qt.callLater(root.resetScroll)
+  onOpenedChanged: if (opened) Qt.callLater(root.resetScroll)
+
+  function resetScroll() {
+    todayScroll.contentY = 0
+    settingsScroll.contentY = 0
+  }
+
   Timer {
     interval: 1000
     running: root.opened
