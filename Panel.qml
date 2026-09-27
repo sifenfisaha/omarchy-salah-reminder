@@ -54,6 +54,18 @@ Panel {
   readonly property color accent: bar ? bar.urgent : Color.urgent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
+  // The service owns playback, so the panel asks it rather than keeping a
+  // second copy of the same fact that could drift out of step. A plugin is
+  // allowed to look up its own service; if that ever returns null the panel
+  // simply never shows the playing strip, which is the right way to fail.
+  readonly property var service: (bar && bar.shell && typeof bar.shell.serviceFor === "function")
+    ? bar.shell.serviceFor("sallah.reminder") : null
+  readonly property string playingPrayer: service ? String(service.playingPrayer || "") : ""
+  readonly property bool adhanPlaying: playingPrayer !== ""
+  readonly property bool volumeMuted: Math.round(Number(config.audio.volume) || 0) <= 0
+  readonly property string playingLabel: (playingPrayer === "" || playingPrayer === "test")
+    ? "" : Model.prayerLabel(playingPrayer)
+
   readonly property string nextLabel: (day && day.next) ? Model.prayerLabel(day.next.key) : ""
   readonly property string nextLabelAr: (day && day.next) ? Model.prayerLabelAr(day.next.key) : ""
   readonly property string nextIcon: (day && day.next) ? PrayerTimes.icon(day.next.key) : PrayerTimes.mosqueIcon()
@@ -288,6 +300,83 @@ Panel {
           id: todayColumn
           width: todayScroll.width
           spacing: Style.space(12)
+
+          // ---- Adhan playing. Sits above everything because while it is
+          //      sounding it is the only thing anyone opens this panel for,
+          //      and the one control they want is Stop. Collapses to zero
+          //      height the rest of the time rather than holding space.
+          Item {
+            width: parent.width
+            visible: root.adhanPlaying
+            height: visible ? Style.space(52) : 0
+
+            Rectangle {
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(12)
+              anchors.rightMargin: Style.space(12)
+              anchors.topMargin: Style.space(8)
+              radius: Style.cornerRadius
+              color: Style.selectedFillFor(root.accent, root.accent)
+
+              Text {
+                id: playingIcon
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(14)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "\uf028"
+                color: root.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.iconLarge
+
+                SequentialAnimation on opacity {
+                  running: root.adhanPlaying
+                  loops: Animation.Infinite
+                  alwaysRunToEnd: true
+                  NumberAnimation { from: 1.0; to: 0.35; duration: 900; easing.type: Easing.InOutQuad }
+                  NumberAnimation { from: 0.35; to: 1.0; duration: 900; easing.type: Easing.InOutQuad }
+                }
+              }
+
+              Column {
+                anchors.left: playingIcon.right
+                anchors.leftMargin: Style.space(12)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(1)
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.playingLabel === "" ? "Adhan" : root.playingLabel
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.playingLabel === "" ? "test playback" : "adhan playing"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+
+              Button {
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Stop"
+                iconText: "\uf04d"
+                bordered: true
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                onClicked: root.run("omarchy-shell sallah stop")
+              }
+            }
+          }
 
           // ---- Hero: progress ring, next prayer, countdown
           Item {
@@ -721,24 +810,11 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(4)
 
+              // Playback controls live in settings, next to the adhan options
+              // they belong to. What stays here is the one thing that is about
+              // this view rather than about configuration.
               PanelActionButton {
-                iconText: ""
-                tooltipText: "Play the adhan now"
-                foreground: root.fg
-                hoverColor: root.accent
-                onClicked: root.run("omarchy-shell sallah test")
-              }
-
-              PanelActionButton {
-                iconText: ""
-                tooltipText: "Stop the adhan"
-                foreground: root.fg
-                hoverColor: root.accent
-                onClicked: root.run("omarchy-shell sallah stop")
-              }
-
-              PanelActionButton {
-                iconText: ""
+                iconText: "\uf013"
                 tooltipText: "Settings"
                 foreground: root.fg
                 hoverColor: root.accent
@@ -1040,6 +1116,38 @@ Panel {
               }
             }
 
+            // Test playback. Deliberately ignores the toggle above and the
+            // per-prayer bells: pressed while the adhan is switched off, a
+            // silent button cannot be told apart from a broken one.
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Button {
+                text: root.adhanPlaying ? "Playing…" : "Play adhan"
+                iconText: "\uf04b"
+                bordered: true
+                fontSize: Style.font.caption
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                active: root.adhanPlaying
+                onClicked: root.run("omarchy-shell sallah test")
+              }
+
+              Button {
+                text: "Stop"
+                iconText: "\uf04d"
+                bordered: true
+                fontSize: Style.font.caption
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                enabled: root.adhanPlaying
+                onClicked: root.run("omarchy-shell sallah stop")
+              }
+            }
+
             Column {
               width: parent.width
               spacing: Style.space(4)
@@ -1072,16 +1180,32 @@ Panel {
                   onReleased: function(v) { root.setNested("audio", "volume", Math.round(v)) }
                 }
 
+                // Zero is a second, invisible mute hiding behind the toggle
+                // above: the adhan still "plays", just inaudibly, and a missed
+                // prayer looks like a broken plugin. Naming the state is
+                // cheaper than forbidding it.
                 Text {
-                  width: Style.space(34)
+                  width: Style.space(44)
                   horizontalAlignment: Text.AlignRight
                   textFormat: Text.PlainText
-                  text: Math.round(root.config.audio.volume) + "%"
-                  color: root.fg
+                  text: root.volumeMuted ? "muted" : (Math.round(root.config.audio.volume) + "%")
+                  color: root.volumeMuted ? root.accent : root.fg
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
+                  font.bold: root.volumeMuted
                   anchors.verticalCenter: parent.verticalCenter
                 }
+              }
+
+              Text {
+                width: parent.width
+                visible: root.volumeMuted && root.config.audio.enabled
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                text: "At zero the adhan still runs, just silently. Raise the volume, or switch it off above if that is what you meant."
+                color: root.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
               }
 
               TextField {
