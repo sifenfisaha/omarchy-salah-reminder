@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "salah.reminder",
   "name": "Salah Reminder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "sifenfisaha",
   "description": "Prayer times in the bar, with the adhan and a full day view",
   "homepage": "https://github.com/sifenfisaha/omarchy-salah-reminder",
