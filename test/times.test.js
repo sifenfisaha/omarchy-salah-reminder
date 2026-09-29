@@ -71,6 +71,8 @@ check("Addis MWL Dhuhr",   hhmm(mwl.dhuhr),   "12:16");
 check("Addis MWL Asr",     hhmm(mwl.asr),     "15:32");
 check("Addis MWL Maghrib", hhmm(mwl.maghrib), "18:18");
 check("Addis MWL Isha",    hhmm(mwl.isha),    "19:24");
+// Removed on purpose (issue #3): the fast begins at Fajr, not before it.
+check("No Imsak time",     typeof mwl.imsak,  "undefined");
 
 const hanafi = times(2026, 9, 27, { ...ADDIS, method: "MWL", asr: "Hanafi" });
 check("Addis Hanafi Asr", hhmm(hanafi.asr), "16:35");

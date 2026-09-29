@@ -840,7 +840,6 @@ Panel {
 
               Repeater {
                 model: root.day ? [
-                  { label: "Imsak",      key: "imsak" },
                   { label: "Duha",       key: "duha" },
                   { label: "Sunset",     key: "sunset" },
                   { label: "Midnight",   key: "midnight" },
