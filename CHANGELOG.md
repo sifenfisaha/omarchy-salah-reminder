@@ -17,6 +17,14 @@ All notable changes to this project are recorded here. The format follows
   download is credited under the setting, an existing custom path keeps
   working, and `omarchy-shell salah fetch` retries a failed download.
 
+### Removed
+
+- The Imsak line in the day view. It sat ten minutes before Fajr, a convention
+  some timetables print but one with no basis in the Sunnah: the fast begins
+  at Fajr itself, and the scholars quoted in
+  [#3](https://github.com/sifenfisaha/omarchy-salah-reminder/issues/3) call
+  an earlier cut-off an innovation. The Fajr row already marks the moment.
+
 ### Fixed
 
 - The configuration could silently reset to defaults. Rewriting `config.json`
