@@ -10,8 +10,7 @@ Prayer times in the Omarchy bar, with the adhan and the whole day one click away
 The bar shows the next prayer and a live countdown. Clicking it opens the day:
 a progress ring through the current window, every prayer with its Arabic name,
 the Hijri date, and the derived times that no timetable prints but everyone
-eventually wants — Imsak, Duha, Islamic midnight, and the last third of the
-night.
+eventually wants — Duha, Islamic midnight, and the last third of the night.
 
 ## Install
 
