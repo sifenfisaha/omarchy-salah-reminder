@@ -27,6 +27,17 @@ omarchy bar move salah.reminder --section center
 On first run the pill shows the plugin's mark. Click it, choose a location, and
 it starts counting down.
 
+### Updating
+
+```bash
+omarchy plugin update salah.reminder
+omarchy restart shell
+```
+
+The first command fetches what is new on `main`, shows the diff, and
+fast-forwards once you confirm (`--yes` skips the prompt). The restart is what
+makes the new code run: the shell's hot reload keeps the old code cached.
+
 ### Requirements
 
 All of these already ship with Omarchy; they are listed so nobody has to read
