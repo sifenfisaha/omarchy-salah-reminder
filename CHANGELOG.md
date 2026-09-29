@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-29
+
 ### Added
 
 - A **Voice** setting. The default is now a live recording from the Prophet's
@@ -16,6 +18,21 @@ All notable changes to this project are recorded here. The format follows
   plugin that never touches the network, and a file of your own. Each
   download is credited under the setting, an existing custom path keeps
   working, and `omarchy-shell salah fetch` retries a failed download.
+
+### Changed
+
+- "Salah" is now spelt the standard way everywhere, and the plugin id is
+  `salah.reminder`. That changes the `omarchy-shell salah` and
+  `salah.reminder` IPC targets, the notification source, the repository name,
+  and the configuration and state directories, now `~/.config/omarchy/salah`
+  and `~/.local/state/omarchy/salah`. To carry an existing install over: move
+  both old `sallah` directories to their new names, rename the plugin folder
+  under `~/.config/omarchy/plugins` to `salah.reminder`, replace
+  `sallah.reminder` in `~/.config/omarchy/shell.json` and in any keybinds,
+  and restart the shell.
+- Repository layout: the pure JavaScript engine now lives in `lib/`, reusable
+  QML in `components/`. Contributor documentation, a changelog, issue and pull
+  request templates, and a CI workflow were added.
 
 ### Removed
 
@@ -48,21 +65,6 @@ All notable changes to this project are recorded here. The format follows
 - Escape did nothing inside the city and custom-file fields.
 - Stop looked clickable while nothing was playing.
 - Settings reopened wherever they had last been scrolled to.
-
-### Changed
-
-- "Salah" is now spelt the standard way everywhere, and the plugin id is
-  `salah.reminder`. That changes the `omarchy-shell salah` and
-  `salah.reminder` IPC targets, the notification source, the repository name,
-  and the configuration and state directories, now `~/.config/omarchy/salah`
-  and `~/.local/state/omarchy/salah`. To carry an existing install over: move
-  both old `sallah` directories to their new names, rename the plugin folder
-  under `~/.config/omarchy/plugins` to `salah.reminder`, replace
-  `sallah.reminder` in `~/.config/omarchy/shell.json` and in any keybinds,
-  and restart the shell.
-- Repository layout: the pure JavaScript engine now lives in `lib/`, reusable
-  QML in `components/`. Contributor documentation, a changelog, issue and pull
-  request templates, and a CI workflow were added.
 
 ## [1.0.0] - 2026-09-27
 
