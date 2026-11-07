@@ -111,6 +111,13 @@ Panel {
   readonly property string nextTime: (day && day.next) ? Model.formatTime(day.next.date, config.timeFormat) : "--:--"
   readonly property string remaining: day ? Model.formatDuration(day.remainingMs) : ""
 
+  // Every animation length goes through Style.duration, which is 0 once
+  // `omarchy toggle animations` turns them off. Omarchy before 4.5 has no
+  // Style.duration, so there the length is used as given.
+  function motion(ms) {
+    return typeof Style.duration === "function" ? Style.duration(ms) : ms
+  }
+
   // ---------------------------------------------------------------- lifecycle
   function open() {
     openedFromHotkey = false
@@ -416,7 +423,7 @@ Panel {
         interactive: contentHeight > height
         visible: opacity > 0
         opacity: root.view === "today" ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 130; easing.type: Easing.OutQuad } }
+        Behavior on opacity { NumberAnimation { duration: root.motion(130); easing.type: Easing.OutQuad } }
 
         Column {
           id: todayColumn
@@ -451,12 +458,14 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.iconLarge
 
+                // Still while animations are off; the row itself already says
+                // the adhan is playing.
                 SequentialAnimation on opacity {
-                  running: root.adhanPlaying
+                  running: root.adhanPlaying && !Style.reduceMotion
                   loops: Animation.Infinite
                   alwaysRunToEnd: true
-                  NumberAnimation { from: 1.0; to: 0.35; duration: 900; easing.type: Easing.InOutQuad }
-                  NumberAnimation { from: 0.35; to: 1.0; duration: 900; easing.type: Easing.InOutQuad }
+                  NumberAnimation { from: 1.0; to: 0.35; duration: root.motion(900); easing.type: Easing.InOutQuad }
+                  NumberAnimation { from: 0.35; to: 1.0; duration: root.motion(900); easing.type: Easing.InOutQuad }
                 }
               }
 
@@ -957,7 +966,7 @@ Panel {
         interactive: contentHeight > height
         visible: opacity > 0
         opacity: root.view === "settings" ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 130; easing.type: Easing.OutQuad } }
+        Behavior on opacity { NumberAnimation { duration: root.motion(130); easing.type: Easing.OutQuad } }
 
         Column {
           id: settingsColumn

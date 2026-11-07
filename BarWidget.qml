@@ -42,6 +42,13 @@ BarWidget {
     ? [PrayerTimes.mosqueIcon()]
     : [prayerIcon, day ? Model.formatCountdown(day.remainingMs, false).replace(/\s+/g, "") : ""]
 
+  // Every animation length goes through Style.duration, which is 0 once
+  // `omarchy toggle animations` turns them off. Omarchy before 4.5 has no
+  // Style.duration, so there the length is used as given.
+  function motion(ms) {
+    return typeof Style.duration === "function" ? Style.duration(ms) : ms
+  }
+
   function refresh() {
     configFile.reload()
     weatherFile.reload()
@@ -218,13 +225,14 @@ BarWidget {
     }
 
     // A slow pulse in the final minutes. Tied to the label rather than the
-    // whole button so the hover fill underneath stays steady.
+    // whole button so the hover fill underneath stays steady. With animations
+    // off it holds still, and the urgent tint alone carries the warning.
     SequentialAnimation on opacity {
-      running: root.imminent && !root.opened
+      running: root.imminent && !root.opened && !Style.reduceMotion
       loops: Animation.Infinite
       alwaysRunToEnd: true
-      NumberAnimation { from: 1.0; to: 0.5; duration: 1300; easing.type: Easing.InOutQuad }
-      NumberAnimation { from: 0.5; to: 1.0; duration: 1300; easing.type: Easing.InOutQuad }
+      NumberAnimation { from: 1.0; to: 0.5; duration: root.motion(1300); easing.type: Easing.InOutQuad }
+      NumberAnimation { from: 0.5; to: 1.0; duration: root.motion(1300); easing.type: Easing.InOutQuad }
     }
 
     Column {

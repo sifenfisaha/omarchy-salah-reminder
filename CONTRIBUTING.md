@@ -25,7 +25,7 @@ Clone straight into that directory, or clone elsewhere and symlink it:
 git clone https://github.com/sifenfisaha/omarchy-salah-reminder.git \
   ~/.config/omarchy/plugins/salah.reminder
 omarchy restart shell
-omarchy bar move salah.reminder --section center   # if the pill is not in the bar yet
+omarchy bar move salah.reminder --section centerEnd   # if the pill is not in the bar yet
 ```
 
 **Restart the shell after every change.** Saving a file under the plugins

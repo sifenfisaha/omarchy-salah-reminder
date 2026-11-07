@@ -21,8 +21,13 @@ omarchy plugin add https://github.com/sifenfisaha/omarchy-salah-reminder.git --e
 Pick a bar section when prompted, or place it yourself afterwards:
 
 ```bash
-omarchy bar move salah.reminder --section center
+omarchy bar move salah.reminder --section centerEnd
 ```
+
+`centerEnd` is just after the clock, beside the weather. Avoid `center`: since
+Omarchy 4.5 that box holds the clock, and anything added to it pushes the clock
+off centre. On Omarchy 4.0 the sections are only `left`, `center` and `right`,
+so use `center` there.
 
 On first run the pill shows the plugin's mark. Click it, choose a location, and
 it starts counting down.
