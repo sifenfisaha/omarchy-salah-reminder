@@ -6,6 +6,18 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Turning animations off with `omarchy toggle animations` (Omarchy 4.5) now
+  stills the plugin too: the countdown in the bar no longer pulses in the
+  last minutes before a prayer, the speaker icon no longer pulses while the
+  adhan plays, and the day view and the settings switch instantly. The urgent
+  colour of the countdown still gives the warning. On Omarchy 4.0 nothing
+  changes.
+- The install instructions place the pill in `centerEnd`, beside the clock.
+  Since Omarchy 4.5 `center` holds the clock on its own, and the old
+  instruction pushed the clock off centre.
+
 ## [1.1.0] - 2026-09-29
 
 ### Added
